@@ -42,6 +42,7 @@ parser.add_argument('-n','--nlikes',default=100)
 parser.add_argument('-m','--maxnum',default=None)
 parser.add_argument('-d','--disk',default=False)
 parser.add_argument('-p','--parts',default=None)
+parser.add_argument('-t','--tag',default=None)
 args = parser.parse_args()
 
 OUTDIR = str(args.outdir) # 'dat/' # output directory for plots, likelihood-weighted population samples
@@ -57,6 +58,9 @@ else: DISK = True
 if args.parts is not None:
 	PARTS = int(args.parts) # number of chunks population samples are split into, assuming 'part0', 'part1', etc labeling
 else: PARTS = None
+if args.tag is not None:
+	TAG = str(args.tag) # optional tag for output file
+else: TAG = None
 
 if not os.path.exists(OUTDIR):
 	os.makedirs(OUTDIR)
@@ -121,9 +125,10 @@ like_funcs = [multivariate_normal(mean,std) for mean,std in zip(saga_like_means,
 ### DO INFERENCE OF BNS DTD AND COLLAPSAR CONTRIBUTION
 
 
-# load abundance predictions
+# load abundance predictions, map likelihoods to delay time distribution parameters and calculate likelihood for abundance predictions
 
-pop_dat, yield_dat = {}, {}
+alphas, tmins, xcolls, rates, mejs = [], [], [], [], []
+log_like = []
 
 k = 0
 
@@ -135,45 +140,58 @@ if PARTS is None:
     pop_dat_i = inputdat['pop']
     yield_dat_i = inputdat['yield']
     
-    for j in range(len(pop_dat_i)):
+    for j in tqdm(range(len(pop_dat_i))):
     
-        pop_dat[str(k)] = pop_dat_i[str(j)]
-        yield_dat[str(k)] = yield_dat_i[str(j)]
+        pop_dat = pop_dat_i[str(j)]
+        yield_dat = yield_dat_i[str(j)]
         
+        alphas += [-pop_dat['b']]
+        tmins += [pop_dat['tmin']]
+        xcolls += [pop_dat['X_coll']]
+        rates += [pop_dat['rate']]
+        mejs += [pop_dat['m_ej']]
+        
+        curve = np.column_stack((yield_dat['Fe_H'],yield_dat['Eu_Fe']))
+        log_likes = [np.log(np.trapz(like_func.pdf(curve),curve[:,0])) for like_func in like_funcs]
+        log_like += [np.sum(log_likes)]
         k += 1
+        
+        if NUM is not None: 
+            if k >= NUM: break
     
 else:
     
     keys = list(np.arange(PARTS))
 
-    for key in keys:
+    for key in tqdm(keys):
         INPUTPATH = '.'.join(POPPATH.split('.')[:-1])+'.part{0}'.format(key)+'.'+POPPATH.split('.')[-1]
 
         inputdat = h5py.File(INPUTPATH, 'r')
         pop_dat_i = inputdat['pop']
         yield_dat_i = inputdat['yield']
 
-        for j in range(len(pop_dat_i)):
+        for j in tqdm(range(len(pop_dat_i))):
 
-            pop_dat[str(k)] = pop_dat_i[str(j)]
-            yield_dat[str(k)] = yield_dat_i[str(j)]
+            pop_dat = pop_dat_i[str(j)]
+            yield_dat = yield_dat_i[str(j)]
 
+            alphas += [-pop_dat['b']]
+            tmins += [pop_dat['tmin']]
+            xcolls += [pop_dat['X_coll']]
+            rates += [pop_dat['rate']]
+            mejs += [pop_dat['m_ej']]
+
+            curve = np.column_stack((yield_dat['Fe_H'],yield_dat['Eu_Fe']))
+            log_likes = [np.log(np.trapz(like_func.pdf(curve),curve[:,0])) for like_func in like_funcs]
+            log_like += [np.sum(log_likes)]
             k += 1
+            
+            if NUM is not None: 
+                if k >= NUM: break
 
-npops = len(pop_dat)
-
-
-# calculate likelihood for abundance predictions
+npops = k
 
 if NUM is None: NUM = npops
-
-log_like = []
-curves = [np.column_stack((yield_dat[str(i)]['Fe_H'],yield_dat[str(i)]['Eu_Fe'])) for i in range(NUM)]
-
-for curve in tqdm(curves):
-        
-    log_likes = [np.log(np.trapz(like_func.pdf(curve),curve[:,0])) for like_func in like_funcs]
-    log_like += [np.sum(log_likes)]
     
 
 ### SAVE RESULTS
@@ -181,17 +199,13 @@ for curve in tqdm(curves):
    
 # map likelihoods to delay time distribution parameters
 
-alphas = [-pop_dat[str(i)]['b'] for i in range(NUM)]
-tmins = [pop_dat[str(i)]['tmin'] for i in range(NUM)]
-xcolls = [pop_dat[str(i)]['X_coll'] for i in range(NUM)]
-rates = [pop_dat[str(i)]['rate'] for i in range(NUM)]
-mejs = [pop_dat[str(i)]['m_ej'] for i in range(NUM)]
 log_wts = log_like-np.max(log_like)
 
 
 # save delay time distribution parameter likelihoods
 
-OUTPATH = OUTDIR+'/'+(EUFEPATH.split('/')[-1]).split('.')[0]+'_{0}.csv'.format(NUM)
+if TAG is None: OUTPATH = OUTDIR+'/'+(EUFEPATH.split('/')[-1]).split('.')[0]+'_{0}.csv'.format(NUM)
+else: OUTPATH = OUTDIR+'/'+(EUFEPATH.split('/')[-1]).split('.')[0]+'_{0}.{1}.csv'.format(NUM,TAG)
 
 outdat = np.column_stack((alphas,tmins,xcolls,mejs,rates,log_like))
 np.savetxt(OUTPATH,outdat,delimiter=',',comments='',header='alpha,tmin,xcoll,mej,rate,log_likelihood')

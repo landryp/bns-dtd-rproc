@@ -7,11 +7,13 @@ outpathtmp=$2 # dat/EuFe -- appends .h5 and appropriate identifying tags
 dtdpaths=$3 # 'etc/label_samples.dat' -- or '', which defaults to uniform DTD parameter prior
 ejpath=$4 # 'etc/mej_gal_lcehl_nicer_numuncertainty.txt'
 
+batchdir='batch' # name of output directory for log files
+
 # Create output files and directories
 
-mkdir -p "$PWD/batch"
-dagfile="$PWD/batch/CalcAbundances.dag"
-configfile="$PWD/batch/CalcAbundances.config"
+mkdir -p "$PWD/$batchdir"
+dagfile="$PWD/$batchdir/CalcAbundances.dag"
+configfile="$PWD/$batchdir/CalcAbundances.config"
 
 echo "${nums}" > $configfile
 echo "${outpathtmp}" >> $configfile
@@ -24,15 +26,15 @@ IFS=',' read -r -a dtdpaths <<< "$dtdpaths"
 # Print sub files
 
 binfile="CalcAbundances.sh"
-subfile="$PWD/batch/${binfile}.sub"
+subfile="$PWD/$batchdir/${binfile}.sub"
 args="arguments = \"\$(num) \$(outpath) \$(dtdpath) \$(ejpath)\""
 
 echo "universe = vanilla" > $subfile
 echo "executable = $PWD/$binfile" >> $subfile
 echo $args >> $subfile
-echo "output = $PWD/batch/$binfile.out" >> $subfile
-echo "error = $PWD/batch/$binfile.err" >> $subfile
-echo "log = $PWD/batch/$binfile.log" >> $subfile
+echo "output = $PWD/$batchdir/$binfile.out" >> $subfile
+echo "error = $PWD/$batchdir/$binfile.err" >> $subfile
+echo "log = $PWD/$batchdir/$binfile.log" >> $subfile
 echo "getenv = True" >> $subfile
 echo "accounting_group = ligo.dev.o4.cbc.extremematter.bilby" >> $subfile
 echo "accounting_group_user = philippe.landry" >> $subfile

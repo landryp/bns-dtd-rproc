@@ -11,3 +11,13 @@ Batch:
 
 bash CalcAbundances_DAG.sh $(cat CalcAbundances_DAG.in)
 condor_submit_dag batch/CalcAbundances.dag
+
+bash InferDTD_DAG.sh $(cat InferDTD_DAG.in)
+condor_submit_dag batch/InferDTD.dag
+
+awk '(NR == 1) || (FNR > 1)' Battistini16_disk_50000.part*.csv > Battistini16_disk-25M.csv
+
+To do:
+
+* running CalcAbundances for bns, grbbns > needs InferDTD, PlotDTD when done
+* need to run CalcAbundances for bnscls, grbbnscls (edit CalcAbundances.sh)
