@@ -7,7 +7,8 @@ outpathtmp=$2 # dat/EuFe -- appends .h5 and appropriate identifying tags
 dtdpaths=$3 # 'etc/label_samples.dat' -- or '', which defaults to uniform DTD parameter prior
 ejpath=$4 # 'etc/mej_gal_lcehl_nicer_numuncertainty.txt'
 
-batchdir='batch' # name of output directory for log files
+batchdir='batch6' # name of output directory for log files
+tag='bnscls' # tag for output path
 
 # Create output files and directories
 
@@ -25,7 +26,7 @@ IFS=',' read -r -a dtdpaths <<< "$dtdpaths"
 
 # Print sub files
 
-binfile="CalcAbundances.sh"
+binfile="CalcAbundances2.sh"
 subfile="$PWD/$batchdir/${binfile}.sub"
 args="arguments = \"\$(num) \$(outpath) \$(dtdpath) \$(ejpath)\""
 
@@ -52,11 +53,13 @@ do
     for j in $(seq 0 $((${#dtdpaths[@]}-1)))
     do
     
-        if [[ $j == 1 ]]; then
-            outtag="bns"
-        else
-            outtag="grbbns"
-        fi
+        outtag="${tag}"
+    
+#        if [[ $j == 0 ]]; then
+#            outtag="${tag}"
+#        else
+#            outtag="grb${tag}"
+#        fi
         
         outpath="${outpathtmp}_${outtag}-${nums[$i]}.part${i}.h5"
     

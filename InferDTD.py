@@ -2,7 +2,7 @@
 # coding: utf-8
 
 'INFERDTD.IPYNB -- infer BNS delay time distribution from stellar abundance data'
-__usage__ = 'InferDTD.py outdir eufepath poppath --nlikes 100 --maxnum 100000 --disk False --parts 10'
+__usage__ = 'InferDTD.py outdir eufepath poppath --maxnum 100000 --disk False --parts 10'
 __author__ = 'Philippe Landry (pgjlandry@gmail.com)'
 __date__ = '09-2023'
 
@@ -38,7 +38,6 @@ parser = ArgumentParser(description=__doc__)
 parser.add_argument('outdir')
 parser.add_argument('eufepath')
 parser.add_argument('poppath')
-parser.add_argument('-n','--nlikes',default=100)
 parser.add_argument('-m','--maxnum',default=None)
 parser.add_argument('-d','--disk',default=False)
 parser.add_argument('-p','--parts',default=None)
@@ -48,7 +47,6 @@ args = parser.parse_args()
 OUTDIR = str(args.outdir) # 'dat/' # output directory for plots, likelihood-weighted population samples
 EUFEPATH = str(args.eufepath) # 'data/SAGA_MP.csv' # observations of stellar Eu vs Fe abundances
 POPPATH = str(args.poppath) # 'dat/EuFe_bnscls-10000.part.h5' # path to population samples
-NLIKES = int(args.nlikes) # number of likelihood samples to draw per observation
 if args.maxnum is not None:
 	NUM = int(args.maxnum) # number of abundance predictions to evaluate likelihood for
 else: NUM = None
@@ -106,7 +104,6 @@ FeHs, EuFes, FeH_errs, EuFe_errs = np.array(FeHs_in), np.array(EuFes_in), np.arr
 
 # make gaussian likelihood model for each SAGA datapoint
 
-saga_dat_likes = []
 saga_like_means = []
 saga_like_stds = []
 
@@ -117,7 +114,6 @@ for fe,eu,fe_err,eu_err in zip(FeHs, EuFes, FeH_errs, EuFe_errs):
     
     saga_like_means += [mean]
     saga_like_stds += [std]   
-    saga_dat_likes += [np.random.multivariate_normal(mean,std,NLIKES)]
     
 like_funcs = [multivariate_normal(mean,std) for mean,std in zip(saga_like_means,saga_like_stds)]
 
@@ -152,6 +148,8 @@ if PARTS is None:
         mejs += [pop_dat['m_ej']]
         
         curve = np.column_stack((yield_dat['Fe_H'],yield_dat['Eu_Fe']))
+        curve = curve[np.where(curve[:,1] >= -5.)[0][0]:]
+        curve = curve[~np.isnan(curve[:,1])]
         log_likes = [np.log(np.trapz(like_func.pdf(curve),curve[:,0])) for like_func in like_funcs]
         log_like += [np.sum(log_likes)]
         k += 1
@@ -182,6 +180,8 @@ else:
             mejs += [pop_dat['m_ej']]
 
             curve = np.column_stack((yield_dat['Fe_H'],yield_dat['Eu_Fe']))
+            curve = curve[np.where(curve[:,1] >= -5.)[0][0]:]
+            curve = curve[~np.isnan(curve[:,1])]
             log_likes = [np.log(np.trapz(like_func.pdf(curve),curve[:,0])) for like_func in like_funcs]
             log_like += [np.sum(log_likes)]
             k += 1
@@ -195,11 +195,6 @@ if NUM is None: NUM = npops
     
 
 ### SAVE RESULTS
-
-   
-# map likelihoods to delay time distribution parameters
-
-log_wts = log_like-np.max(log_like)
 
 
 # save delay time distribution parameter likelihoods

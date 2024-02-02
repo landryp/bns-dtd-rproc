@@ -5,7 +5,9 @@ Scripts:
 
 CalcAbundances.py num outpath dtdpath ejpath --alpha alpha_min,alpha_max --tmin tmin_min,tmin_max --xcoll xcoll_min,xcoll_max --marg nmarg # calculate Eu vs Fe abundance history given models for binary neutron star merger ejecta, delay time distribution and fractional contribution relative to collapsars
 
-InferDTD.py outdir eufepath poppath --nlikes 100 --maxnum 100000 --disk False --parts 10 > maxL.out # infer binary neutron star delay time distribution parameters and fractional collapsar contribution from stellar r-process abundance observations and Eu vs Fe abundance history predictions
+InferDTD.py outdir eufepath poppath --maxnum 100000 --disk False --parts 10 > maxL.out # infer binary neutron star delay time distribution parameters and fractional collapsar contribution from stellar r-process abundance observations and Eu vs Fe abundance history predictions
+
+PlotPost.py > stats.txt
 
 Batch:
 
@@ -15,9 +17,5 @@ condor_submit_dag batch/CalcAbundances.dag
 bash InferDTD_DAG.sh $(cat InferDTD_DAG.in)
 condor_submit_dag batch/InferDTD.dag
 
-awk '(NR == 1) || (FNR > 1)' Battistini16_disk_50000.part*.csv > Battistini16_disk-25M.csv
-
-To do:
-
-* running CalcAbundances for bns, grbbns > needs InferDTD, PlotDTD when done
-* need to run CalcAbundances for bnscls, grbbnscls (edit CalcAbundances.sh)
+cp Battistini16_disk_50000.part0.csv Battistini16_disk_5M.csv
+for i in {1..99}; do awk '(FNR > 1)' Battistini16_disk_50000.part${i}.csv >> Battistini16_disk_5M.csv; done
