@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-'INFERDTD.IPYNB -- infer BNS delay time distribution from stellar abundance data'
-__usage__ = 'InferDTD.py outdir eufepath poppath --maxnum 100000 --disk False --parts 10'
+'INFERBNSDTD.IPYNB -- infer binary neutron star delay time distribution parameters and fractional second-channel contribution from galactic r-process abundance observations and Eu vs Fe abundance histories'
+__usage__ = 'InferDTD.py outdir obspath eufepath --maxnum maxnum --parts parts'
 __author__ = 'Philippe Landry (pgjlandry@gmail.com)'
 __date__ = '09-2023'
 
@@ -14,45 +14,26 @@ __date__ = '09-2023'
 
 from argparse import ArgumentParser
 import numpy as np
-from scipy.interpolate import interp1d
 from scipy.stats import multivariate_normal
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
 import os
 import h5py
 from tqdm import tqdm
-import astropy.units as u
-from astropy.coordinates import Distance
-from astropy.cosmology import Planck15 as cosmo
-from astropy.cosmology import z_at_value
-
-plt.rcParams["text.usetex"] = True
-plt.rcParams["font.family"] = "serif"
-sns.set_palette('Set1',color_codes=True)
-
 
 parser = ArgumentParser(description=__doc__)
 parser.add_argument('outdir')
+parser.add_argument('obspath')
 parser.add_argument('eufepath')
-parser.add_argument('poppath')
 parser.add_argument('-m','--maxnum',default=None)
-parser.add_argument('-d','--disk',default=False)
 parser.add_argument('-p','--parts',default=None)
 parser.add_argument('-t','--tag',default=None)
 args = parser.parse_args()
 
 OUTDIR = str(args.outdir) # 'dat/' # output directory for plots, likelihood-weighted population samples
-EUFEPATH = str(args.eufepath) # 'data/SAGA_MP.csv' # observations of stellar Eu vs Fe abundances
-POPPATH = str(args.poppath) # 'dat/EuFe_bnscls-10000.part.h5' # path to population samples
+OBSPATH = str(args.obspath) # 'data/SAGA_MP.csv' # observations of stellar Eu vs Fe abundances
+EUFEPATH = str(args.eufepath) # 'dat/EuFe_bnscls-10000.part.h5' # path to population samples
 if args.maxnum is not None:
 	NUM = int(args.maxnum) # number of abundance predictions to evaluate likelihood for
 else: NUM = None
-if args.disk == 'False' or args.disk is False:
-	DISK = False # whether to restrict to disk stars ([Fe/H] > -1.)
-else: DISK = True
 if args.parts is not None:
 	PARTS = int(args.parts) # number of chunks population samples are split into, assuming 'part0', 'part1', etc labeling
 else: PARTS = None
@@ -64,42 +45,12 @@ if not os.path.exists(OUTDIR):
 	os.makedirs(OUTDIR)
 
 
-### BUILD LIKELIHOOD FUNCTION FOR OBSERVATIONS
+### BUILD LIKELIHOOD FUNCTIONS FOR OBSERVATIONS
 
 
 # load SAGA data
 
 FeHs, EuFes, FeH_errs, EuFe_errs = np.loadtxt(EUFEPATH, unpack=True, delimiter=',', skiprows=1)
-
-
-# examine distribution of errors and compute means
-
-avg_FeH_err = np.mean(FeH_errs[FeH_errs>0.])
-avg_EuFe_err = np.mean(EuFe_errs[EuFe_errs>0.])
-
-
-# impose disk/halo star cut if desired, and use average errors for data points without error bars
-
-if DISK: FE_CUT = -1. # cut at [Fe/H] > -1., disk stars only
-else: FE_CUT = -1e16 # no cut, halo+disk
-
-FeHs_in, EuFes_in, FeH_errs_in, EuFe_errs_in = [], [], [], [] # replace data with no errors
-for FeH, EuFe, FeH_err, EuFe_err in zip(FeHs, EuFes, FeH_errs, EuFe_errs):
-    
-    if FeH > FE_CUT:
-    
-        FeHs_in += [FeH]
-        EuFes_in += [EuFe]
-    
-        if FeH_err > 0. and EuFe_err > 0.:
-            FeH_errs_in += [FeH_err]
-            EuFe_errs_in += [EuFe_err]
-
-        else:
-            FeH_errs_in += [avg_FeH_err]
-            EuFe_errs_in += [avg_EuFe_err]
-        
-FeHs, EuFes, FeH_errs, EuFe_errs = np.array(FeHs_in), np.array(EuFes_in), np.array(FeH_errs_in), np.array(EuFe_errs_in)
 
 
 # make gaussian likelihood model for each SAGA datapoint
@@ -130,7 +81,7 @@ k = 0
 
 if PARTS is None:
     
-    INPUTPATH = POPPATH
+    INPUTPATH = EUFEPATH
 
     inputdat = h5py.File(INPUTPATH, 'r')
     pop_dat_i = inputdat['pop']
@@ -162,7 +113,7 @@ else:
     keys = list(np.arange(PARTS))
 
     for key in tqdm(keys):
-        INPUTPATH = '.'.join(POPPATH.split('.')[:-1])+'.part{0}'.format(key)+'.'+POPPATH.split('.')[-1]
+        INPUTPATH = '.'.join(EUFEPATH.split('.')[:-1])+'.part{0}'.format(key)+'.'+EUFEPATH.split('.')[-1]
 
         inputdat = h5py.File(INPUTPATH, 'r')
         pop_dat_i = inputdat['pop']

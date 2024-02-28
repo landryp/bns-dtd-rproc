@@ -2,8 +2,8 @@
 # coding: utf-8
 
 
-'CALCABUNDANCES.PY -- calculate Eu vs Fe ratio from BNS population model and ejecta model, based on Daniel Siegel\'s one-zone r-process code'
-__usage__ = 'CalcAbundances.py num outpath dtdpath ejpath --alpha alpha_min,alpha_max --tmin tmin_min,tmin_max --xcoll xcoll_min,xcoll_max'
+'CALCULATEENRICHMENTHISTORY.PY -- calculate Eu vs Fe abundance history from binary neutron star merger rate, ejecta, delay time distribution and fractional contribution relative to a second channel, using Daniel Siegel\'s one-zone r-process nucleosynthesis code'
+__usage__ = 'CalculateEnrichmentHistory.py nsamp outpath dtdpath ejpath --alpha alpha_min,alpha_max --tmin tmin_min,tmin_max --xsfh xsfh_min,xsfh_max --nmarg nmarg'
 __author__ = 'Philippe Landry (pgjlandry@gmail.com)'
 __date__ = '09-2023'
 
@@ -16,43 +16,33 @@ __date__ = '09-2023'
 from argparse import ArgumentParser
 import numpy as np
 import scipy
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import os
 import h5py
 import numpy.lib.recfunctions as rfn
 from tqdm import tqdm
 
-from CE_utils import * # import Daniel Siegel's one-zone r-process code
-
-plt.rcParams["text.usetex"] = True
-plt.rcParams["font.family"] = "serif"
-sns.set_palette('Set1',color_codes=True)
+from etc.SiegelOneZone import * # import Daniel Siegel's one-zone r-process code
 
 
 parser = ArgumentParser(description=__doc__)
-parser.add_argument('num')
+parser.add_argument('nsamp')
 parser.add_argument('outpath')
 parser.add_argument('dtdpath')
 parser.add_argument('ejpath')
 parser.add_argument('-s','--solpath',default='etc/arnould_07_solar_r-process.txt')
 parser.add_argument('-a','--alpha',default="-3.,-0.5")
 parser.add_argument('-t','--tmin',default="1e-2,2.01")
-parser.add_argument('-x','--xcoll',default="1e-6,0.999999")
-parser.add_argument('-m','--marg',default=100)
+parser.add_argument('-x','--xsfh',default="1e-3,0.999")
+parser.add_argument('-m','--nmarg',default=500)
 args = parser.parse_args()
 
-NUM = int(args.num) # 100 # number of abundance predictions to calculate -- equals number of BNS DTD samples to draw
+NUM = int(args.nsamp) # 100 # number of abundance predictions to calculate -- equals number of BNS DTD samples to draw
 OUTPATH = str(args.outpath) # 'dat/EuFe_grbbnscls-100.h5' # outpath path for Eu vs Fe abundance curves, population samples
 DTDPATH = str(args.dtdpath) # 'etc/label_samples.dat' # GRB-informed DTD parameter distributions # '' # uniform DTD parameter distribution
 EJECTAPATH = str(args.ejpath) # 'etc/mej_gal_lcehl_nicer_numuncertainty.txt' # input samples in ejecta mass and rate
 SOLARPATH = str(args.solpath) # 'etc/arnould_07_solar_r-process.txt' # solar abundances
 ALPHA_BOUNDS = [float(bnd) for bnd in str(args.alpha).split(',')] # (-3.,-0.5) # bounds for uniform prior DTD power law index
 TDMIN_BOUNDS = [float(bnd) for bnd in str(args.tmin).split(',')] # (1e-2,2.01) # bounds for log-uniform prior on minimum delay time in Gyr # see below for option to change to uniform prior
-EU_RATIO_Z0_BOUNDS = [float(bnd) for bnd in str(args.xcoll).split(',')] # (1e-6,1.) # bounds for log-uniform prior on fractional contribution of collapsar channel to local r-process mass*rate density (i.e. m_Eu_coll*norm_coll/(m_Eu_coll*norm_coll + m_Eu_bns*norm_bns)) # see below for option to change to uniform prior
+EU_RATIO_Z0_BOUNDS = [float(bnd) for bnd in str(args.xsfh).split(',')] # (1e-6,1.) # bounds for log-uniform prior on fractional contribution of collapsar channel to local r-process mass*rate density (i.e. m_Eu_coll*norm_coll/(m_Eu_coll*norm_coll + m_Eu_bns*norm_bns)) # see below for option to change to uniform prior
 NUM_MARG = int(args.marg) # 100 # number of mej and rate samples per DTD sample
 
 

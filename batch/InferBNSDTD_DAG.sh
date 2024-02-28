@@ -4,27 +4,27 @@
 
 outdir=$1 # dat/SAGA_grbbns/
 obspath=$2 # etc/SAGA_MP.csv
-poppathtmp=$3 # dat/EuFe_grbbns-100 -- appends appropriate part tag and .h5
+eufepathtmp=$3 # dat/EuFe_grbbns-100 -- appends appropriate part tag and .h5
 parts=$4 # 100
 
-batchdir='batch' # name of output directory for log files
+batchdir='infer_batch' # name of output directory for log files
 
 # Create output files and directories
 
 mkdir -p "$PWD/$batchdir"
-dagfile="$PWD/$batchdir/InferDTD.dag"
-configfile="$PWD/$batchdir/InferDTD.config"
+dagfile="$PWD/$batchdir/InferBNSDTD.dag"
+configfile="$PWD/$batchdir/InferBNSDTD.config"
 
 echo "${outdir}" > $configfile
 echo "${obspath}" >> $configfile
-echo "${poppathtmp}" >> $configfile
+echo "${eufepathtmp}" >> $configfile
 echo "${parts}" >> $configfile
 
 # Print sub files
 
-binfile="InferDTD.sh"
+binfile="InferBNSDTD.sh"
 subfile="$PWD/$batchdir/${binfile}.sub"
-args="arguments = \"\$(outdir) \$(obspath) \$(poppath) \$(tag)\""
+args="arguments = \"\$(outdir) \$(obspath) \$(eufepath) \$(tag)\""
 
 echo "universe = vanilla" > $subfile
 echo "executable = $PWD/$binfile" >> $subfile
@@ -47,11 +47,11 @@ job=0
 for i in $(seq 0 $((${parts}-1)))
 do
 
-    poppath="${poppathtmp}.part${i}.h5"
+    eufepath="${eufepathtmp}.part${i}.h5"
     tag="part${i}"
 
     echo "JOB $job $subfile" >> $dagfile
-    echo "VARS $job outdir=\"${outdir}\" obspath=\"${obspath}\" poppath=\"${poppath}\" tag=\"${tag}\"" >> $dagfile
+    echo "VARS $job outdir=\"${outdir}\" obspath=\"${obspath}\" eufepath=\"${eufepath}\" tag=\"${tag}\"" >> $dagfile
     echo "RETRY $job 1" >> $dagfile
 
     job=$(($job+1))
