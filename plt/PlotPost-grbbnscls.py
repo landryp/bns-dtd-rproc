@@ -29,10 +29,12 @@ from astropy.coordinates import Distance
 from astropy.cosmology import Planck15 as cosmo
 from astropy.cosmology import z_at_value
 
-plt.rcParams["text.usetex"] = True
-plt.rcParams["font.family"] = "serif"
+#plt.rcParams["text.usetex"] = True
+#plt.rcParams["font.family"] = "serif"
 
-sns.set_palette('Set1',color_codes=True)
+#sns.set_palette('Set1',color_codes=True)
+color = 'firebrick'
+compare_color = 'saddlebrown'
 
 
 # user input
@@ -54,6 +56,20 @@ NPOP = 100
 NMARG = 500
 
 MAXNUM = PARTS*NPOP*NMARG
+
+LIKEDIR2 = '/home/philippe.landry/bns-dtd-rproc/dat/SAGA_bnscls/'
+LIKEDIR_DISK2 = '/home/philippe.landry/bns-dtd-rproc/dat/Battistini_bnscls/'
+LIKEPATH2 = 'SAGA_MP_5M.csv'
+LIKEPATH_DISK2 = 'Battistini16_disk_5M.csv'
+
+POPDIR2 = '/home/philippe.landry/bns-dtd-rproc/dat/'
+POPPATH2 = 'EuFe_bnscls-10.h5'
+
+PARTS2 = 1000
+NPOP2 = 10
+NMARG2 = 500
+
+MAXNUM2 = PARTS2*NPOP2*NMARG2
 
 ### LOADING INPUTS
 
@@ -112,7 +128,7 @@ FeHs_disk, EuFes_disk, FeH_errs_disk, EuFe_errs_disk = np.array(FeHs_in), np.arr
 
 # load population realizations and likelihoods
 
-alphas, tmins, xcolls, mejs, rates, loglikes = np.loadtxt(LIKEDIR+LIKEPATH, unpack=True, delimiter=',', skiprows=1, max_rows=MAXNUM)
+alphas, tmins, xcolls, mejs, rates, loglikes = np.loadtxt(LIKEDIR2+LIKEPATH2, unpack=True, delimiter=',', skiprows=1, max_rows=MAXNUM2)
 ybnss = np.array(rates)*np.array(mejs)
 
 loglikes = loglikes - np.max(loglikes)
@@ -172,6 +188,34 @@ for key in tqdm(keys):
         mejs += [pop_dat['m_ej']]
         
         k += 1
+
+        
+# load abundance predictions
+
+keys = [str(key) for key in range(PARTS2)]
+eu_pts_list2, rates2, mejs2 = [], [], []
+
+k = 0
+
+for key in tqdm(keys):
+    INPUTPATH2 = POPDIR2+'.'.join(POPPATH2.split('.')[:-1])+'.part{0}'.format(key)+'.'+POPPATH2.split('.')[-1]
+
+    inputdat2 = h5py.File(INPUTPATH2, 'r')
+    yield_dat_i2 = inputdat2['yield']
+    pop_dat_i2 = inputdat2['pop']
+    
+    for j in range(len(yield_dat_i2)):
+    
+        yield_dat2 = yield_dat_i2[str(j)]
+        pop_dat2 = pop_dat_i2[str(j)]
+        func = interp1d(yield_dat2['Fe_H'],yield_dat2['Eu_Fe'],bounds_error=False)
+        eu_pts = func(fe_grid)
+        eu_pts_list2 += [eu_pts]
+        
+        rates2 += [pop_dat2['rate']]
+        mejs2 += [pop_dat2['m_ej']]
+        
+        k += 1
         
         
 ### MAKE ABUNDANCE PREDICTION PLOT
@@ -180,8 +224,8 @@ for key in tqdm(keys):
 # calculate abundance history confidence envelopes
 
 num_funcs = 10000
-eu_pts_idxs = np.random.choice(range(len(eu_pts_list)),num_funcs,True,likes/np.sum(likes))
-eu_pts_samps = np.array([eu_pts_list[idx] for idx in eu_pts_idxs]).T
+eu_pts_idxs = np.random.choice(range(len(eu_pts_list2)),num_funcs,True,likes/np.sum(likes))
+eu_pts_samps = np.array([eu_pts_list2[idx] for idx in eu_pts_idxs]).T
 
 eu_pts_disk_idxs = np.random.choice(range(len(eu_pts_list)),num_funcs,True,likes_disk/np.sum(likes_disk))
 eu_pts_disk_samps = np.array([eu_pts_list[idx] for idx in eu_pts_disk_idxs]).T
@@ -201,27 +245,31 @@ ubs_disk_std = [np.nanquantile(eu_pts_disk_samps[i],0.84) for i in range(len(fe_
         
 # plot inferred abundance history on top of observations
 
-plt.figure(figsize=(8,5))
+plt.figure(figsize=(6.4,4.8))
 
-plt.errorbar(FeHs, EuFes, xerr=[FeH_errs,FeH_errs], yerr=[EuFe_errs,EuFe_errs], c=sns.color_palette()[1], fmt=',', lw=0.5, alpha=1, label='SAGA MP',zorder=1)
-plt.scatter(FeHs, EuFes,c=sns.color_palette()[1],marker='.',s=2,zorder=1)
-plt.scatter(FeHs_disk, EuFes_disk,facecolor=sns.color_palette()[1],edgecolor='k',linewidth=0.5, s=5,label='Battistini 2016',zorder=2)
+#plt.plot(fe_grid,lbs,color=compare_color, ls='--', label='BNS+SFR',zorder=10)
+#plt.plot(fe_grid,ubs,color=compare_color, ls='--', zorder=10)
+#plt.fill_between(fe_grid,lbs,ubs,facecolor=compare_color,edgecolor=None,alpha=0.25, label='BNS+SFR (sGRB)',zorder=10) # 90% CI
+#plt.fill_between(fe_grid,lbs_std,ubs_std,facecolor=compare_color,edgecolor=None,alpha=0.5,zorder=10) # 68% CI
 
-plt.fill_between(fe_grid,lbs_disk,ubs_disk,facecolor=sns.color_palette()[0],edgecolor=None,alpha=0.2,zorder=4) # 90% CI
-plt.fill_between(fe_grid,lbs_disk_std,ubs_disk_std,facecolor=sns.color_palette()[0],edgecolor=None,alpha=0.4,zorder=4) # 68% CI
+plt.fill_between(fe_grid,lbs_disk,ubs_disk,facecolor=color,edgecolor=None,alpha=0.25, label='BNS+SFR',zorder=10) # 90% CI
+plt.fill_between(fe_grid,lbs_disk_std,ubs_disk_std,facecolor=color,edgecolor=None,alpha=0.5,zorder=10) # 68% CI
+plt.plot(fe_grid,mds_disk,c=color,zorder=10) # median
 
-plt.plot(fe_grid,mds_disk,c=sns.color_palette()[0],alpha=1,label='BNS',zorder=5) # median
+plt.errorbar(FeHs, EuFes, xerr=[FeH_errs,FeH_errs], yerr=[EuFe_errs,EuFe_errs], c='g', fmt=',', lw=1, label='SAGA')
+#plt.scatter(FeHs, EuFes,c=sns.color_palette()[1],marker='.',s=2,zorder=1)
+plt.scatter(FeHs_disk, EuFes_disk,marker='D',facecolor='dodgerblue',edgecolor='navy', s=16, lw=0.5, label='Battistini & Bensby (2016)')
 
 #plt.plot(fe_grid,mds,c=sns.color_palette()[0],ls='--',lw=1,alpha=1,zorder=3)
-plt.plot(fe_grid,ubs,c=sns.color_palette()[0],ls='--',lw=1,alpha=1,zorder=3)
-plt.plot(fe_grid,lbs,c=sns.color_palette()[0],ls='--',lw=1,alpha=1,zorder=3)
+#plt.plot(fe_grid,ubs,c=sns.color_palette()[0],ls='--',lw=1,alpha=1,zorder=3)
+#plt.plot(fe_grid,lbs,c=sns.color_palette()[0],ls='--',lw=1,alpha=1,zorder=3)
 
 plt.xlim(-3.,0.5)
 plt.ylim(-1.,1.5)
-plt.xlabel('[Fe/H]',fontsize=16)
-plt.ylabel('[Eu/Fe]',fontsize=16)
-plt.legend(frameon=False,loc='upper right')
-plt.savefig('EuFe_grbbnscls.png')
+plt.xlabel('[Fe/H]')#,fontsize=16)
+plt.ylabel('[Eu/Fe]')#,fontsize=16)
+plt.legend(frameon=True,loc='upper right')
+plt.savefig('EuFe_grbbnscls.pdf')
 
 
 ### RECORD DTD PARAMETER CONSTRAINTS
@@ -270,158 +318,159 @@ print('mean: {0}\n'.format(np.mean(ybnss[eu_pts_idxs])),'median: {0}\n'.format(n
 # plot BNS DTD parameter posteriors
 
 wts = likes_disk
-wts_halo = likes
+wts_compare = likes
 
-alphas_halo = alphas[eu_pts_idxs]
-tmins_halo = tmins[eu_pts_idxs]
-xcolls_halo = xcolls[eu_pts_idxs]
-ybnss_halo = ybnss[eu_pts_idxs]
+tmins = np.array(tmins)*1e3
+tmins_disk = np.array(tmins_disk)*1e3
 
-alphas_disk = alphas_disk[eu_pts_disk_idxs]
-tmins_disk = tmins_disk[eu_pts_disk_idxs]
-xcolls_disk = xcolls_disk[eu_pts_disk_idxs]
-ybnss_disk = ybnss_disk[eu_pts_disk_idxs]
+alphas_compare = alphas[eu_pts_idxs]
+tmins_compare = tmins[eu_pts_idxs]
+xcolls_compare = xcolls[eu_pts_idxs]
+ybnss_compare = ybnss[eu_pts_idxs]
+
+alphas_post = alphas_disk[eu_pts_disk_idxs]
+tmins_post = tmins_disk[eu_pts_disk_idxs]
+xcolls_post = xcolls_disk[eu_pts_disk_idxs]
+ybnss_post = ybnss_disk[eu_pts_disk_idxs]
 
 prior_idxs = np.random.choice(range(len(alphas)),10000,True)
 
 # plot BNS DTD parameter posteriors
 
-fig=plt.figure(figsize=(8,2.5))
+fig=plt.figure(figsize=(6.4,2.4))
 
 axx=plt.subplot(1, 3, 1)
 
-tmins_disk_reflect, alphas_disk_reflect, tmins_halo_reflect, alphas_halo_reflect = [], [], [], []
-'''
-for alpha,tmin,alpha_halo,tmin_halo in zip(alphas_disk,tmins_disk,alphas_halo,tmins_halo):
- 
+tmins_post_reflect, alphas_post_reflect, tmins_compare_reflect, alphas_compare_reflect = [], [], [], []
+
+for alpha,tmin,alpha_compare,tmin_compare in zip(alphas_post,tmins_post,alphas_compare,tmins_compare):
+    '''
     if tmin < 0.015:
-        tmins_disk_reflect += [np.exp(2*np.log(0.01)-np.log(tmin))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
-        alphas_disk_reflect += [alpha]
+        tmins_post_reflect += [np.exp(2*np.log(0.01)-np.log(tmin))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
+        alphas_post_reflect += [alpha]
           
     elif tmin > 0.9:
-        tmins_disk_reflect += [np.exp(2*np.log(2.01)-np.log(tmin))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
-        alphas_disk_reflect += [alpha]
+        tmins_post_reflect += [np.exp(2*np.log(2.01)-np.log(tmin))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
+        alphas_post_reflect += [alpha]
  
     if alpha < -2.9:
-        tmins_disk_reflect += [tmin]
-        alphas_disk_reflect += [2*(-3.)-alpha]
+        tmins_post_reflect += [tmin]
+        alphas_post_reflect += [2*(-3.)-alpha]
         
     elif alpha > -0.4:
-        tmins_disk_reflect += [tmin]
-        alphas_disk_reflect += [2*(-0.5)-alpha]
-        
-    if tmin_halo < 0.015:
-        tmins_halo_reflect += [np.exp(2*np.log(0.01)-np.log(tmin_halo))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
-        alphas_halo_reflect += [alpha_halo]
-         
-    elif tmin_halo > 0.9:
-        tmins_halo_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_halo))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
-        alphas_halo_reflect += [alpha_halo]
- 
-    if alpha_halo < -2.9:
-        tmins_halo_reflect += [tmin_halo]
-        alphas_halo_reflect += [2*(-3.)-alpha_halo]
-        
-    elif alpha_halo > -0.4:
-        tmins_halo_reflect += [tmin_halo]
-        alphas_halo_reflect += [2*(-0.5)-alpha_halo]
-'''       
-axx.scatter(alphas[::NMARG],np.log10(tmins[::NMARG]),marker='.',s=0.6,c='k',alpha=0.1)
-sns.kdeplot(x=list(alphas_disk)+alphas_disk_reflect,y=np.log10(list(tmins_disk)+tmins_disk_reflect),levels=[0.1,0.32],c=sns.color_palette()[0],cut=3,axes=axx)
-sns.kdeplot(x=list(alphas_halo)+alphas_halo_reflect,y=np.log10(list(tmins_halo)+tmins_halo_reflect),levels=[0.1],c=sns.color_palette()[0],cut=3,linewidths=1,linestyles='--',axes=axx)
+        tmins_post_reflect += [tmin]
+        alphas_post_reflect += [2*(-0.5)-alpha]
+    '''        
+    if tmin_compare < 0.015*1e3:
+        tmins_compare_reflect += [2*(0.01*1e3)-tmin_compare] # log x-axis # [2*(0.01)-tmin] # linear x-axis
+        alphas_compare_reflect += [alpha_compare]
+    '''         
+    elif tmin_compare > 0.9:
+        tmins_compare_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_compare))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
+        alphas_compare_reflect += [alpha_compare]
+    ''' 
+    if alpha_compare < -2.9:
+        tmins_compare_reflect += [tmin_compare]
+        alphas_compare_reflect += [2*(-3.)-alpha_compare]
+    '''        
+    elif alpha_compare > -0.4:
+        tmins_compare_reflect += [tmin_compare]
+        alphas_compare_reflect += [2*(-0.5)-alpha_compare]
+    '''       
+axx.scatter(alphas_disk[::NMARG],np.log10(tmins_disk[::NMARG]),marker='.',s=0.6,c='k',alpha=0.1)
+sns.kdeplot(x=list(alphas_post)+alphas_post_reflect,y=np.log10(list(tmins_post)+tmins_post_reflect),levels=[0.1,0.32],c=color,cut=20,axes=axx)
+sns.kdeplot(x=list(alphas_compare)+alphas_compare_reflect,y=np.log10(list(tmins_compare)+tmins_compare_reflect),levels=[0.1],c=compare_color,cut=20,linestyles='--',axes=axx)
+
+plt.plot([-10.,-10.],[-10.,-5.],color='k',alpha=1,label='prior')
+plt.plot([-10.,-10.],[-10.,-5.],color=compare_color,ls='--',label='BNS+SFR')
+plt.plot([-10.,-10.],[-10.,-5.],color=color,alpha=1,label='BNS+SFR (sGRB)')
 
 axx.set_xlim(-3.,-1.)
-axx.set_ylim(-2.,0.)
-axx.set_xlabel(r'$\alpha$',fontsize=16)
-axx.set_ylabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Gyr}$',fontsize=16)
+axx.set_ylim(1.,3.)
+axx.set_xlabel(r'$\alpha$')#,fontsize=16)
+axx.set_ylabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Myr}$')#,fontsize=16)
+plt.legend(frameon=True,loc='upper left',fontsize=6)
 
 ax=plt.subplot(1, 3, 2)
 
-alphas_reflect, alphas_disk_reflect, alphas_halo_reflect = [], [], []
-'''
-for alpha,alpha_disk,alpha_halo in zip(alphas,alphas_disk,alphas_halo):
+alphas_disk_reflect, alphas_post_reflect, alphas_compare_reflect = [], [], []
 
+for alpha,alpha_post,alpha_compare in zip(alphas_disk,alphas_post,alphas_compare):
+    '''
     if alpha < -2.9:
         alphas_reflect += [2*(-3.)-alpha]
         
     elif alpha > -0.4:
         alphas_reflect += [2*(-0.5)-alpha]
         
-    if alpha_disk < -2.9:
-        alphas_disk_reflect += [2*(-3.)-alpha_disk]
+    if alpha_post < -2.9:
+        alphas_post_reflect += [2*(-3.)-alpha_post]
         
-    elif alpha_disk > -0.4:
-        alphas_disk_reflect += [2*(-0.5)-alpha_disk]
-        
-    if alpha_halo < -2.9:
-        alphas_halo_reflect += [2*(-3.)-alpha_halo]
-        
-    elif alpha_halo > -0.4:
-        alphas_halo_reflect += [2*(-0.5)-alpha_halo]
-'''
-ax.hist(alphas[::NMARG],density=True,bins=np.arange(-2.9,-0.9,0.1),color='k',alpha=0.1)
-ax.hist(alphas_disk,density=True,bins=np.arange(-2.9,-0.9,0.1),color=sns.color_palette()[0],alpha=0.2)
+    elif alpha_post > -0.4:
+        alphas_post_reflect += [2*(-0.5)-alpha_post]
+    '''        
+    if alpha_compare < -2.9:
+        alphas_compare_reflect += [2*(-3.)-alpha_compare]
+    '''        
+    elif alpha_compare > -0.4:
+        alphas_compare_reflect += [2*(-0.5)-alpha_compare]
+    '''
+ax.hist(alphas_disk[::NMARG],density=True,bins=np.arange(-3.,-0.9,0.1),color='k',alpha=0.1)
+ax.hist(alphas_post,density=True,bins=np.arange(-3.,-0.9,0.1),color=color,alpha=0.25)
 
-sns.kdeplot(x=list(alphas)+alphas_reflect,color='k',axes=ax,alpha=0.7,bw_adjust=1.2)
-sns.kdeplot(x=list(alphas_disk)+alphas_disk_reflect,c=sns.color_palette()[0],axes=ax,bw_adjust=1.2)
-sns.kdeplot(x=list(alphas_halo)+alphas_halo_reflect,c=sns.color_palette()[0],lw=1,ls='--',axes=ax,bw_adjust=1.2)
-
-plt.hist([-10.,-10.],[-10.,-5.],color='k',alpha=0.1,label='prior')
-plt.hist([-10.,-10.],[-10.,-5.],color=sns.color_palette()[0],alpha=0.2,label='posterior')
+sns.kdeplot(x=list(alphas_disk)+alphas_disk_reflect,color='k',axes=ax,alpha=0.7)
+sns.kdeplot(x=list(alphas_post)+alphas_post_reflect,c=color,axes=ax,cut=20)
+sns.kdeplot(x=list(alphas_compare)+alphas_compare_reflect,c=compare_color,cut=20,ls='--',axes=ax)
 
 ax.set_xlim(-3.,-1.)
 ax.set_ylim(0.,4.)
-ax.set_xlabel(r'$\alpha$',fontsize=16)
-ax.set_ylabel('Probability density',fontsize=16)
+ax.set_xlabel(r'$\alpha$')#,fontsize=16)
+ax.set_ylabel('Probability density')#,fontsize=16)
 ax.set_yticks([0.,1.,2.,3.,4.])
 ax.set_yticklabels([])
 
 ax=plt.subplot(1, 3, 3)
 
-tmins_reflect, tmins_disk_reflect, tmins_halo_reflect = [], [], []
-'''
-for tmin, tmin_disk, tmin_halo in zip(tmins,tmins_disk,tmins_halo): # reflect across hard prior bounds
- 
+tmins_disk_reflect, tmins_post_reflect, tmins_compare_reflect = [], [], []
+
+for tmin, tmin_post, tmin_compare in zip(tmins_disk,tmins_post,tmins_compare): # reflect across hard prior bounds
+    '''
     if tmin < 0.015:
         tmins_reflect += [np.exp(2*np.log(0.01)-np.log(tmin))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
           
     elif tmin > 0.9:
         tmins_reflect += [np.exp(2*np.log(2.01)-np.log(tmin))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
 
-    if tmin_disk < 0.015:
-        tmins_disk_reflect += [np.exp(2*np.log(0.01)-np.log(tmin_disk))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
+    if tmin_post < 0.015:
+        tmins_post_reflect += [np.exp(2*np.log(0.01)-np.log(tmin_post))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
           
-    elif tmin_disk > 0.9:
-        tmins_disk_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_disk))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
-    
-    if tmin_halo < 0.015:
-        tmins_halo_reflect += [np.exp(2*np.log(0.01)-np.log(tmin_halo))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
-          
-    elif tmin_halo > 0.9:
-        tmins_halo_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_halo))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
-'''    
-ax.hist(np.log10(tmins[::NMARG]),density=True,bins=np.arange(-1.9,0.1,0.1),color='k',alpha=0.1)
-ax.hist(np.log10(tmins_disk),density=True,bins=np.arange(-1.9,0.1,0.1),color=sns.color_palette()[0],alpha=0.2)
+    elif tmin_post > 0.9:
+        tmins_post_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_post))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
+    '''    
+    if tmin_compare < 0.015*1e3:
+        tmins_compare_reflect += [2*(0.01*1e3)-tmin_compare] # log x-axis # [2*(0.01)-tmin] # linear x-axis
+    '''          
+    elif tmin_compare > 0.9:
+        tmins_compare_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_compare))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
+    '''    
+ax.hist(np.log10(tmins_disk[::NMARG]),density=True,bins=np.arange(0.,3.1,0.1),color='k',alpha=0.1)
+ax.hist(np.log10(tmins_post),density=True,bins=np.arange(0.,3.1,0.1),color=color,alpha=0.25)
 
-sns.kdeplot(x=np.log10(list(tmins)+tmins_reflect),color='k',axes=ax,alpha=0.7,bw_adjust=1.2)
-sns.kdeplot(x=np.log10(list(tmins_disk)+tmins_disk_reflect),c=sns.color_palette()[0],axes=ax,bw_adjust=1.2)
-sns.kdeplot(x=np.log10(list(tmins_halo)+tmins_halo_reflect),c=sns.color_palette()[0],lw=1,ls='--',axes=ax,bw_adjust=1.2)
+sns.kdeplot(x=np.log10(list(tmins_disk)+tmins_disk_reflect),color='k',axes=ax,alpha=0.7)
+sns.kdeplot(x=np.log10(list(tmins_post)+tmins_post_reflect),c=color,axes=ax)
+sns.kdeplot(x=np.log10(list(tmins_compare)+tmins_compare_reflect),c=compare_color,ls='--',axes=ax)
 
-plt.hist([-10.,-10.],[-10.,-5.],color='k',alpha=0.1,label='prior')
-plt.hist([-10.,-10.],[-10.,-5.],color=sns.color_palette()[0],alpha=0.2,label='posterior')
-
-ax.set_xlim(-2.,0.)
+ax.set_xlim(1.,3.)
 ax.set_ylim(0.,4.)
-ax.set_xlabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Gyr}$',fontsize=16)
+ax.set_xlabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Myr}$')#,fontsize=16)
 ax.set_yticks([0.,1.,2.,3.,4.])
 ax.set_ylabel('')
 ax.set_yticklabels([])
-plt.legend(frameon=False,loc='upper left')
 
 fig.subplots_adjust(wspace=0.5)
 #plt.tight_layout()
 plt.subplots_adjust(bottom=0.2)
-plt.savefig('dtd_grbbnscls.png')
+plt.savefig('dtd_grbbnscls.pdf')
 
 
 ### MAKE INFERRED XSFR PLOT
@@ -429,117 +478,126 @@ plt.savefig('dtd_grbbnscls.png')
 
 # plot Xsfr parameter posteriors
 
-fig=plt.figure(figsize=(8,2.5))
+fig=plt.figure(figsize=(6.4,2.4))
 
 ax=plt.subplot(1, 3, 1)
 
-xcolls_reflect, xcolls_disk_reflect, xcolls_halo_reflect = [], [], []
+xcolls_disk_reflect, xcolls_post_reflect, xcolls_compare_reflect = [], [], []
 
-for xcoll,xcoll_disk,xcoll_halo in zip(xcolls,xcolls_disk,xcolls_halo): # reflect across hard prior bounds
+for xcoll,xcoll_post,xcoll_compare in zip(xcolls_disk,xcolls_post,xcolls_compare): # reflect across hard prior bounds
  
     if xcoll < 0.2:
-        xcolls_reflect += [2.*(0.)-xcoll]
+        xcolls_disk_reflect += [2.*(0.)-xcoll]
             
     elif xcoll > 0.8:
-        xcolls_reflect += [2.*(1.)-xcoll]
+        xcolls_disk_reflect += [2.*(1.)-xcoll]
         
-    if xcoll_disk < 0.2:
-        xcolls_disk_reflect += [2.*(0.)-xcoll_disk]
+    if xcoll_post < 0.2:
+        xcolls_post_reflect += [2.*(0.)-xcoll_post]
             
-    elif xcoll_disk > 0.8:
-        xcolls_disk_reflect += [2.*(1.)-xcoll_disk]
+    elif xcoll_post > 0.8:
+        xcolls_post_reflect += [2.*(1.)-xcoll_post]
         
-    if xcoll_halo < 0.2:
-        xcolls_halo_reflect += [2.*(0.)-xcoll_halo]
+    if xcoll_compare < 0.2:
+        xcolls_compare_reflect += [2.*(0.)-xcoll_compare]
             
-    elif xcoll_halo > 0.8:
-        xcolls_halo_reflect += [2.*(1.)-xcoll_halo]
+    elif xcoll_compare > 0.8:
+        xcolls_compare_reflect += [2.*(1.)-xcoll_compare]
 
-ax.hist(list(xcolls[::NMARG])+xcolls_reflect[::NMARG],density=True,bins=np.arange(0.05,1.05,0.05),color='k',alpha=0.1)
-ax.hist(list(xcolls_disk)+xcolls_disk_reflect,density=True,bins=np.arange(0.05,1.05,0.05),color=sns.color_palette()[0],alpha=0.2)
+ax.hist(list(xcolls_disk[::NMARG])+xcolls_disk_reflect[::NMARG],density=True,bins=np.arange(0.0,1.05,0.05),color='k',alpha=0.1)
+ax.hist(list(xcolls_post)+xcolls_post_reflect,density=True,bins=np.arange(0.0,1.05,0.05),color=color,alpha=0.25)
 
-sns.kdeplot(x=list(xcolls)+xcolls_reflect,color='k',axes=ax,alpha=0.7,bw_adjust=1.2)
-sns.kdeplot(x=list(xcolls_disk)+xcolls_disk_reflect,c=sns.color_palette()[0],axes=ax,bw_adjust=1.2)
-sns.kdeplot(x=list(xcolls_halo)+xcolls_halo_reflect,c=sns.color_palette()[0],lw=1,ls='--',axes=ax,bw_adjust=1.2)
+sns.kdeplot(x=list(xcolls_disk)+xcolls_disk_reflect,color='k',axes=ax,alpha=0.7)
+sns.kdeplot(x=list(xcolls_post)+xcolls_post_reflect,c=color,axes=ax)
+sns.kdeplot(x=list(xcolls_compare)+xcolls_compare_reflect,c=compare_color,ls='--',axes=ax)
 
-plt.hist([-10.,-10.],[-10.,-5.],color='k',alpha=0.1,label='prior')
-plt.hist([-10.,-10.],[-10.,-5.],color=sns.color_palette()[0],alpha=0.2,label='posterior')
+plt.plot([-10.,-10.],[-10.,-5.],color='k',alpha=1,label='prior')
+plt.plot([-10.,-10.],[-10.,-5.],color=compare_color,ls='--',label='BNS+SFR')
+plt.plot([-10.,-10.],[-10.,-5.],color=color,alpha=1,label='BNS+SFR (sGRB)')
 
 ax.set_xlim(0.,1.)
 ax.set_ylim(0.,4.)
-ax.set_xlabel(r'$X_\mathrm{SFR}$',fontsize=16)
-ax.set_ylabel('Probability density',fontsize=16)
+ax.set_xlabel(r'$X_\mathrm{SFR}$')#,fontsize=16)
+ax.set_ylabel('Probability density')#,fontsize=16)
 ax.set_yticks([0.,1.,2.,3.,4.])
 ax.set_yticklabels([])
-plt.legend(frameon=False,loc='upper left')
+plt.legend(frameon=True,loc='upper left',fontsize=6)
 
 axx=plt.subplot(1, 3, 2)
 
-alphas_disk_reflect, alphas_halo_reflect, xcolls_disk_reflect, xcolls_halo_reflect = [], [], [], []
+alphas_post_reflect, alphas_compare_reflect, xcolls_post_reflect, xcolls_compare_reflect = [], [], [], []
 
-for alpha,alpha_halo,xcoll,xcoll_halo in zip(alphas_disk,alphas_halo,xcolls_disk,xcolls_halo):
+for alpha,alpha_compare,xcoll,xcoll_compare in zip(alphas_post,alphas_compare,xcolls_post,xcolls_compare):
  
     if xcoll < 0.1:
-        alphas_disk_reflect += [alpha]
-        xcolls_disk_reflect += [2.*(0.)-xcoll]
+        alphas_post_reflect += [alpha]
+        xcolls_post_reflect += [2.*(0.)-xcoll]
             
     elif xcoll > 0.9:
-        alphas_disk_reflect += [alpha]
-        xcolls_disk_reflect += [2.*(1.)-xcoll]
+        alphas_post_reflect += [alpha]
+        xcolls_post_reflect += [2.*(1.)-xcoll]
         
-    if xcoll_halo < 0.1:
-        alphas_halo_reflect += [alpha_halo]
-        xcolls_halo_reflect += [2.*(0.)-xcoll_halo]
+    if xcoll_compare < 0.1:
+        alphas_compare_reflect += [alpha_compare]
+        xcolls_compare_reflect += [2.*(0.)-xcoll_compare]
             
-    elif xcoll_halo > 0.9:
-        alphas_halo_reflect += [alpha_halo]
-        xcolls_halo_reflect += [2.*(1.)-xcoll_halo]
+    elif xcoll_compare > 0.9:
+        alphas_compare_reflect += [alpha_compare]
+        xcolls_compare_reflect += [2.*(1.)-xcoll_compare]
+        
+    if alpha_compare < -2.9:
+        alphas_compare_reflect += [2*(-3.)-alpha_compare]
+        xcolls_compare_reflect += [xcoll_compare]
 
-axx.scatter(alphas[::NMARG],xcolls[::NMARG],marker='.',s=0.6,c='k',alpha=0.1)
-sns.kdeplot(x=list(alphas_disk)+alphas_disk_reflect,y=list(xcolls_disk)+xcolls_disk_reflect,levels=[0.1,0.32],c=sns.color_palette()[0],cut=3,axes=axx)
-sns.kdeplot(x=list(alphas_halo)+alphas_halo_reflect,y=list(xcolls_halo)+xcolls_halo_reflect,levels=[0.1],c=sns.color_palette()[0],cut=3,linewidths=1,linestyles='--',axes=axx)
+axx.scatter(alphas_disk[::NMARG],xcolls_disk[::NMARG],marker='.',s=0.6,c='k',alpha=0.1)
+sns.kdeplot(x=list(alphas_post)+alphas_post_reflect,y=list(xcolls_post)+xcolls_post_reflect,levels=[0.1,0.32],c=color,cut=20,axes=axx)
+sns.kdeplot(x=list(alphas_compare)+alphas_compare_reflect,y=list(xcolls_compare)+xcolls_compare_reflect,levels=[0.1],c=compare_color,cut=20,linestyles='--',axes=axx)
 
 axx.set_xlim(-3.,-1.)
 axx.set_ylim(0.,1.)
-axx.set_xlabel(r'$\alpha$',fontsize=16)
-axx.set_ylabel(r'$X_\mathrm{SFR}$',fontsize=16)
+axx.set_xlabel(r'$\alpha$')#,fontsize=16)
+axx.set_ylabel(r'$X_\mathrm{SFR}$')#,fontsize=16)
 
 axx=plt.subplot(1, 3, 3)
 
-tmins_disk_reflect, tmins_halo_reflect, xcolls_disk_reflect, xcolls_halo_reflect = [], [], [], []
+tmins_post_reflect, tmins_compare_reflect, xcolls_post_reflect, xcolls_compare_reflect = [], [], [], []
 
-for tmin,tmin_halo,xcoll,xcoll_halo in zip(tmins_disk,tmins_halo,xcolls_disk,xcolls_halo):
+for tmin,tmin_compare,xcoll,xcoll_compare in zip(tmins_post,tmins_compare,xcolls_post,xcolls_compare):
  
     if xcoll < 0.1:
-        tmins_disk_reflect += [tmin]
-        xcolls_disk_reflect += [2.*(0.)-xcoll]
+        tmins_post_reflect += [tmin]
+        xcolls_post_reflect += [2.*(0.)-xcoll]
             
     elif xcoll > 0.9:
-        tmins_disk_reflect += [tmin]
-        xcolls_disk_reflect += [2.*(1.)-xcoll]
+        tmins_post_reflect += [tmin]
+        xcolls_post_reflect += [2.*(1.)-xcoll]
         
-    if xcoll_halo < 0.1:
-        tmins_halo_reflect += [tmin_halo]
-        xcolls_halo_reflect += [2.*(0.)-xcoll_halo]
+    if xcoll_compare < 0.1:
+        tmins_compare_reflect += [tmin_compare]
+        xcolls_compare_reflect += [2.*(0.)-xcoll_compare]
             
-    elif xcoll_halo > 0.9:
-        tmins_halo_reflect += [tmin_halo]
-        xcolls_halo_reflect += [2.*(1.)-xcoll_halo]
+    elif xcoll_compare > 0.9:
+        tmins_compare_reflect += [tmin_compare]
+        xcolls_compare_reflect += [2.*(1.)-xcoll_compare]
+        
+    if tmin_compare < 0.015*1e3:
+        tmins_compare_reflect += [2*(0.01*1e3)-tmin_compare]
+        xcolls_compare_reflect += [xcoll_compare]
 
-axx.scatter(np.log10(tmins[::NMARG]),xcolls[::NMARG],marker='.',s=0.6,c='k',alpha=0.1)
-sns.kdeplot(x=np.log10(list(tmins_disk)+tmins_disk_reflect),y=list(xcolls_disk)+xcolls_disk_reflect,levels=[0.1,0.32],c=sns.color_palette()[0],cut=3,axes=axx)
-sns.kdeplot(x=np.log10(list(tmins_halo)+tmins_halo_reflect),y=list(xcolls_halo)+xcolls_halo_reflect,levels=[0.1],c=sns.color_palette()[0],cut=3,linewidths=1,linestyles='--',axes=axx)
+axx.scatter(np.log10(tmins_disk[::NMARG]),xcolls_disk[::NMARG],marker='.',s=0.6,c='k',alpha=0.1)
+sns.kdeplot(x=np.log10(list(tmins_post)+tmins_post_reflect),y=list(xcolls_post)+xcolls_post_reflect,levels=[0.1,0.32],c=color,cut=20,axes=axx)
+sns.kdeplot(x=np.log10(list(tmins_compare)+tmins_compare_reflect),y=list(xcolls_compare)+xcolls_compare_reflect,levels=[0.1],c=compare_color,cut=20,linestyles='--',axes=axx)
 
-axx.set_xlim(-2.,0.)
+axx.set_xlim(1.,3.)
 axx.set_ylim(0.,1.)
-axx.set_xlabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Gyr}$',fontsize=16)
+axx.set_xlabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Myr}$')#,fontsize=16)
 axx.set_ylabel('')
 axx.set_yticklabels([])
 
-fig.subplots_adjust(wspace=0.5)
+plt.subplots_adjust(wspace=0.5)
 #plt.tight_layout()
 plt.subplots_adjust(bottom=0.2)
-plt.savefig('xsfr_grbbnscls.png')
+plt.savefig('xsfr_grbbnscls.pdf')
 
 
 ### MAKE INFERRED RATE-MEJ PLOT
@@ -549,144 +607,143 @@ plt.savefig('xsfr_grbbnscls.png')
 
 ybnss = np.array(rates)*np.array(mejs)
 
-fig=plt.figure(figsize=(8,2.5))
+fig=plt.figure(figsize=(6.4,2.4))
 
 axx=plt.subplot(1, 3, 1)
 
-ybnss_disk_reflect, xcolls_disk_reflect, ybnss_halo_reflect, xcolls_halo_reflect, = [], [], [], []
+ybnss_post_reflect, xcolls_post_reflect, ybnss_compare_reflect, xcolls_compare_reflect, = [], [], [], []
 
-for ybns,xcoll,ybns_halo,xcoll_halo in zip(ybnss_disk,xcolls_disk,ybnss_halo,xcolls_halo):
+for ybns,xcoll,ybns_compare,xcoll_compare in zip(ybnss_post,xcolls_post,ybnss_compare,xcolls_compare):
  
     if xcoll < 0.1:
-        ybnss_disk_reflect += [ybns]
-        xcolls_disk_reflect += [2.*(0.)-xcoll]
+        ybnss_post_reflect += [ybns]
+        xcolls_post_reflect += [2.*(0.)-xcoll]
             
     elif xcoll > 0.9:
-        ybnss_disk_reflect += [ybns]
-        xcolls_disk_reflect += [2.*(1.)-xcoll]
+        ybnss_post_reflect += [ybns]
+        xcolls_post_reflect += [2.*(1.)-xcoll]
         
     if ybns < 10.:
-        xcolls_disk_reflect += [xcoll]
-        ybnss_disk_reflect += [2.*(0.)-ybns]
+        xcolls_post_reflect += [xcoll]
+        ybnss_post_reflect += [2.*(0.)-ybns]
     '''            
     elif ybns > 190.:
-        xcolls_disk_reflect += [xcoll]
-        ybnss_disk_reflect += [2.*(200.)-ybns]
+        xcolls_post_reflect += [xcoll]
+        ybnss_post_reflect += [2.*(200.)-ybns]
     '''
-    if xcoll_halo < 0.1:
-        ybnss_halo_reflect += [ybns_halo]
-        xcolls_halo_reflect += [2.*(0.)-xcoll_halo]
+    if xcoll_compare < 0.1:
+        ybnss_compare_reflect += [ybns_compare]
+        xcolls_compare_reflect += [2.*(0.)-xcoll_compare]
             
-    elif xcoll_halo > 0.9:
-        ybnss_halo_reflect += [ybns_halo]
-        xcolls_halo_reflect += [2.*(1.)-xcoll_halo]
+    elif xcoll_compare > 0.9:
+        ybnss_compare_reflect += [ybns_compare]
+        xcolls_compare_reflect += [2.*(1.)-xcoll_compare]
         
-    if ybns_halo < 10.:
-        xcolls_halo_reflect += [xcoll_halo]
-        ybnss_halo_reflect += [2.*(0.)-ybns_halo]
+    if ybns_compare < 10.:
+        xcolls_compare_reflect += [xcoll_compare]
+        ybnss_compare_reflect += [2.*(0.)-ybns_compare]
     '''            
-    elif ybns_halo > 190.:
-        xcolls_halo_reflect += [xcoll_halo]
-        ybnss_halo_reflect += [2.*(200.)-ybns_halo]
+    elif ybns_compare > 190.:
+        xcolls_compare_reflect += [xcoll_compare]
+        ybnss_compare_reflect += [2.*(200.)-ybns_compare]
     '''
     
-axx.scatter(ybnss[prior_idxs],xcolls[prior_idxs],marker='.',s=0.6,c='k',alpha=0.05)
-sns.kdeplot(x=list(ybnss_disk)+ybnss_disk_reflect,y=list(xcolls_disk)+xcolls_disk_reflect,levels=[0.1,0.32],c=sns.color_palette()[0],cut=3,axes=axx)
-sns.kdeplot(x=list(ybnss_halo)+ybnss_halo_reflect,y=list(xcolls_halo)+xcolls_halo_reflect,levels=[0.1],c=sns.color_palette()[0],cut=3,linewidths=1,linestyles='--',axes=axx)
+axx.scatter(ybnss_disk[prior_idxs],xcolls_disk[prior_idxs],marker='.',s=0.6,c='k',alpha=0.05)
+sns.kdeplot(x=list(ybnss_post)+ybnss_post_reflect,y=list(xcolls_post)+xcolls_post_reflect,levels=[0.1,0.32],c=color,cut=20,axes=axx)
+sns.kdeplot(x=list(ybnss_post)+ybnss_post_reflect,y=list(xcolls_post)+xcolls_post_reflect,levels=[0.32,1.],color=color,alpha=0.25,fill=True,cut=20,axes=axx)
+#sns.kdeplot(x=list(ybnss_compare)+ybnss_compare_reflect,y=list(xcolls_compare)+xcolls_compare_reflect,levels=[0.1],c=compare_color,cut=20,linestyles='--',axes=axx)
+
+plt.plot([-10.,-10.],[-10.,-5.],color='k',alpha=1,label='prior')
+#plt.plot([-10.,-10.],[-10.,-5.],color=compare_color,ls='--',label='BNS+SFR')
+plt.plot([-10.,-10.],[-10.,-5.],color=color,alpha=1,label='BNS+SFR')
 
 axx.set_xlim(0.,30.)
 axx.set_ylim(0.,1.)
-axx.set_xlabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$',fontsize=16)
-axx.set_ylabel(r'$X_\mathrm{SFR}$',fontsize=16)
+axx.set_xlabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$')#,fontsize=16)
+axx.set_ylabel(r'$X_\mathrm{SFR}$')#,fontsize=16)
+plt.legend(frameon=True,loc='upper right',fontsize=6)
 
 ax=plt.subplot(1, 3, 2)
 
-ybnss_reflect, ybnss_disk_reflect, ybnss_halo_reflect = [], [], []
+ybnss_disk_reflect, ybnss_post_reflect, ybnss_compare_reflect = [], [], []
 
-for ybns,ybns_disk,ybns_halo in zip(ybnss,ybnss_disk,ybnss_halo):
+for ybns,ybns_post,ybns_compare in zip(ybnss_disk,ybnss_post,ybnss_compare):
         
     if ybns < 20.:
-        ybnss_reflect += [2.*(0.)-ybns]
+        ybnss_disk_reflect += [2.*(0.)-ybns]
     '''            
     elif ybns > 180.:
         ybnss_reflect += [2.*(200.)-ybns]
     '''
-    if ybns_disk < 20.:
-        ybnss_disk_reflect += [2.*(0.)-ybns_disk]
+    if ybns_post < 20.:
+        ybnss_post_reflect += [2.*(0.)-ybns_post]
     '''            
-    elif ybns_disk > 180.:
-        ybnss_disk_reflect += [2.*(200.)-ybns_disk]
+    elif ybns_post > 180.:
+        ybnss_post_reflect += [2.*(200.)-ybns_post]
     '''
-    if ybns_halo < 20.:
-        ybnss_halo_reflect += [2.*(0.)-ybns_halo]
+    if ybns_compare < 20.:
+        ybnss_compare_reflect += [2.*(0.)-ybns_compare]
     '''            
-    elif ybns_halo > 180.:
-        ybnss_halo_reflect += [2.*(200.)-ybns_halo]
+    elif ybns_compare > 180.:
+        ybnss_compare_reflect += [2.*(200.)-ybns_compare]
     '''
 
-ax.hist(list(ybnss[:500])+ybnss_reflect[:500],density=True,bins=np.arange(1.,31.,1.),color='k',alpha=0.1)
-ax.hist(list(ybnss_disk)+ybnss_disk_reflect,density=True,bins=np.arange(1.,31.,1.),color=sns.color_palette()[0],alpha=0.2)
+ax.hist(list(ybnss_disk[:500])+ybnss_disk_reflect[:500],density=True,bins=np.arange(0.,31.,1.),color='k',alpha=0.1)
+ax.hist(list(ybnss_post)+ybnss_post_reflect,density=True,bins=np.arange(0.,31.,1.),color=color,alpha=0.25)
 
-sns.kdeplot(x=list(ybnss)+ybnss_reflect,color='k',axes=ax,alpha=0.7,bw_adjust=1.2)
-sns.kdeplot(x=list(ybnss_disk)+ybnss_disk_reflect,c=sns.color_palette()[0],axes=ax,bw_adjust=1.2)
-sns.kdeplot(x=list(ybnss_halo)+ybnss_halo_reflect,c=sns.color_palette()[0],lw=1,ls='--',axes=ax,bw_adjust=1.2)
-
-plt.hist([-10.,-10.],[-10.,-5.],color='k',alpha=0.1,label='prior')
-plt.hist([-10.,-10.],[-10.,-5.],color=sns.color_palette()[0],alpha=0.2,label='posterior')
+sns.kdeplot(x=list(ybnss_disk)+ybnss_disk_reflect,color='k',axes=ax,alpha=0.7,cut=20)
+sns.kdeplot(x=list(ybnss_post)+ybnss_post_reflect,c=color,axes=ax,cut=20)
+#sns.kdeplot(x=list(ybnss_compare)+ybnss_compare_reflect,c=compare_color,ls='--',axes=ax,cut=20)
 
 ax.set_xlim(0.,30.)
 ax.set_ylim(0.,0.3)
-ax.set_xlabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$',fontsize=16)
-ax.set_ylabel('Probability density',fontsize=16)
+ax.set_xlabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$')#,fontsize=16)
+ax.set_ylabel('Probability density')#,fontsize=16)
 ax.set_yticks([0.,0.075,0.15,0.225,0.3])
 ax.set_yticklabels([])
 
 ax=plt.subplot(1, 3, 3)
 
-xcolls_reflect, xcolls_disk_reflect, xcolls_halo_reflect = [], [], []
+xcolls_disk_reflect, xcolls_post_reflect, xcolls_compare_reflect = [], [], []
 
-for xcoll,xcoll_disk,xcoll_halo in zip(xcolls,xcolls_disk,xcolls_halo):
+for xcoll,xcoll_post,xcoll_compare in zip(xcolls_disk,xcolls_post,xcolls_compare):
  
     if xcoll < 0.2:
-        xcolls_reflect += [2.*(0.)-xcoll]
+        xcolls_disk_reflect += [2.*(0.)-xcoll]
             
     elif xcoll > 0.8:
-        xcolls_reflect += [2.*(1.)-xcoll]
+        xcolls_disk_reflect += [2.*(1.)-xcoll]
         
-    if xcoll_disk < 0.2:
-        xcolls_disk_reflect += [2.*(0.)-xcoll_disk]
+    if xcoll_post < 0.2:
+        xcolls_post_reflect += [2.*(0.)-xcoll_post]
             
-    elif xcoll_disk > 0.8:
-        xcolls_disk_reflect += [2.*(1.)-xcoll_disk]
+    elif xcoll_post > 0.8:
+        xcolls_post_reflect += [2.*(1.)-xcoll_post]
         
-    if xcoll_halo < 0.2:
-        xcolls_halo_reflect += [2.*(0.)-xcoll_halo]
+    if xcoll_compare < 0.2:
+        xcolls_compare_reflect += [2.*(0.)-xcoll_compare]
             
-    elif xcoll_halo > 0.8:
-        xcolls_halo_reflect += [2.*(1.)-xcoll_halo]
+    elif xcoll_compare > 0.8:
+        xcolls_compare_reflect += [2.*(1.)-xcoll_compare]
 
-ax.hist(list(xcolls[::NMARG])+xcolls_reflect[::NMARG],density=True,bins=np.arange(0.05,1.05,0.05),color='k',alpha=0.1)
-ax.hist(list(xcolls_disk)+xcolls_disk_reflect,density=True,bins=np.arange(0.05,1.05,0.05),color=sns.color_palette()[0],alpha=0.2)
+ax.hist(list(xcolls_disk[::NMARG])+xcolls_disk_reflect[::NMARG],density=True,bins=np.arange(0.0,1.05,0.05),color='k',alpha=0.1)
+ax.hist(list(xcolls_post)+xcolls_post_reflect,density=True,bins=np.arange(0.0,1.05,0.05),color=color,alpha=0.25)
 
-sns.kdeplot(x=list(xcolls)+xcolls_reflect,color='k',axes=ax,alpha=0.7,bw_adjust=1.2)
-sns.kdeplot(x=list(xcolls_disk)+xcolls_disk_reflect,c=sns.color_palette()[0],axes=ax,bw_adjust=1.2)
-sns.kdeplot(x=list(xcolls_halo)+xcolls_halo_reflect,c=sns.color_palette()[0],lw=1,ls='--',axes=ax,bw_adjust=1.2)
-
-plt.hist([-10.,-10.],[-10.,-5.],color='k',alpha=0.1,label='prior')
-plt.hist([-10.,-10.],[-10.,-5.],color=sns.color_palette()[0],alpha=0.2,label='posterior')
+sns.kdeplot(x=list(xcolls_disk)+xcolls_disk_reflect,color='k',axes=ax,alpha=0.7,cut=20)
+sns.kdeplot(x=list(xcolls_post)+xcolls_post_reflect,c=color,axes=ax,cut=20)
+#sns.kdeplot(x=list(xcolls_compare)+xcolls_compare_reflect,c=compare_color,ls='--',axes=ax,cut=20)
 
 ax.set_xlim(0.,1.)
 ax.set_ylim(0.,4.)
-ax.set_xlabel(r'$X_\mathrm{SFR}$',fontsize=16)
+ax.set_xlabel(r'$X_\mathrm{SFR}$')#,fontsize=16)
 ax.set_yticks([0.,1.,2.,3.,4.])
 ax.set_ylabel('')
 ax.set_yticklabels([])
-plt.legend(frameon=False,loc='upper left')
 
 fig.subplots_adjust(wspace=0.5)
 #plt.tight_layout()
 plt.subplots_adjust(bottom=0.2)
-plt.savefig('ratemej_grbbnscls.png')
+plt.savefig('ratemej_grbbnscls.pdf')
 
 
 ### MAKE INFERRED YBNS PLOT
@@ -696,26 +753,26 @@ plt.savefig('ratemej_grbbnscls.png')
 
 ybnss = np.array(rates)*np.array(mejs)
 
-fig=plt.figure(figsize=(8,2.5))
+fig=plt.figure(figsize=(6.4,2.4))
 
 ax=plt.subplot(1, 3, 1)
 
-ybnss_disk_reflect, ybnss_halo_reflect, ybnss_reflect = [], [], []
+ybnss_post_reflect, ybnss_compare_reflect, ybnss_reflect = [], [], []
 
-for ybns_disk,ybns_halo,ybns in zip(ybnss_disk,ybnss_halo,ybnss): # reflect across hard prior bounds
+for ybns_post,ybns_compare,ybns in zip(ybnss_post,ybnss_compare,ybnss): # reflect across hard prior bounds
  
-    if ybns_disk < 20.:
-        ybnss_disk_reflect += [2.*(0.)-ybns_disk]
+    if ybns_post < 20.:
+        ybnss_post_reflect += [2.*(0.)-ybns_post]
     '''            
-    elif ybns_disk > 180.:
-        ybnss_disk_reflect += [2.*(1.)-ybns_disk]
+    elif ybns_post > 180.:
+        ybnss_post_reflect += [2.*(1.)-ybns_post]
     '''
     
-    if ybns_halo < 20.:
-        ybnss_halo_reflect += [2.*(0.)-ybns_halo]
+    if ybns_compare < 20.:
+        ybnss_compare_reflect += [2.*(0.)-ybns_compare]
     '''            
-    elif ybns_halo > 180.:
-        ybnss_halo_reflect += [2.*(1.)-ybns_halo]
+    elif ybns_compare > 180.:
+        ybnss_compare_reflect += [2.*(1.)-ybns_compare]
     '''
     
     if ybns < 20.:
@@ -725,122 +782,140 @@ for ybns_disk,ybns_halo,ybns in zip(ybnss_disk,ybnss_halo,ybnss): # reflect acro
         ybnss_reflect += [2.*(1.)-ybns]
     '''
 
-ax.hist(list(ybnss[:500])+ybnss_reflect[:500],density=True,bins=np.arange(1.,31.,1.),color='k',alpha=0.1)
-ax.hist(list(ybnss_disk)+ybnss_disk_reflect,density=True,bins=np.arange(1.,31.,1.),color=sns.color_palette()[0],alpha=0.2)
+ax.hist(list(ybnss_disk[:500])+ybnss_disk_reflect[:500],density=True,bins=np.arange(0.,31.,1.),color='k',alpha=0.1)
+ax.hist(list(ybnss_post)+ybnss_post_reflect,density=True,bins=np.arange(0.,31.,1.),color=color,alpha=0.25)
 
-sns.kdeplot(x=list(ybnss)+ybnss_reflect,color='k',axes=ax,alpha=0.7,bw_adjust=1.2)
-sns.kdeplot(x=list(ybnss_disk)+ybnss_disk_reflect,c=sns.color_palette()[0],axes=ax,bw_adjust=1.2)
-sns.kdeplot(x=list(ybnss_halo)+ybnss_halo_reflect,c=sns.color_palette()[0],lw=1,ls='--',axes=ax,bw_adjust=1.2)
+sns.kdeplot(x=list(ybnss_disk)+ybnss_disk_reflect,color='k',axes=ax,alpha=0.7,cut=20)
+sns.kdeplot(x=list(ybnss_post)+ybnss_post_reflect,c=color,axes=ax,cut=20)
+sns.kdeplot(x=list(ybnss_compare)+ybnss_compare_reflect,c=compare_color,ls='--',axes=ax,cut=20)
 
-plt.hist([-10.,-10.],[-10.,-5.],color='k',alpha=0.1,label='prior')
-plt.hist([-10.,-10.],[-10.,-5.],color=sns.color_palette()[0],alpha=0.2,label='posterior')
+plt.plot([-10.,-10.],[-10.,-5.],color='k',alpha=1,label='prior')
+plt.plot([-10.,-10.],[-10.,-5.],color=compare_color,ls='--',label='BNS+SFR')
+plt.plot([-10.,-10.],[-10.,-5.],color=color,alpha=1,label='BNS+SFR (sGRB)')
 
 ax.set_xlim(0.,30.)
 ax.set_ylim(0.,0.3)
-ax.set_xlabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$',fontsize=16)
-ax.set_ylabel('Probability density',fontsize=16)
+ax.set_xlabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$')#,fontsize=16)
+ax.set_ylabel('Probability density')#,fontsize=16)
 ax.set_yticks([0.,0.075,0.15,0.225,0.3])
 ax.set_yticklabels([])
-plt.legend(frameon=False,loc='upper right')
+plt.legend(frameon=True,loc='upper right',fontsize=6)
 
 axx=plt.subplot(1, 3, 2)
 
-alphas_disk_reflect, alphas_halo_reflect, ybnss_disk_reflect, ybnss_halo_reflect = [], [], [], []
+alphas_post_reflect, alphas_compare_reflect, ybnss_post_reflect, ybnss_compare_reflect = [], [], [], []
 
-for alpha,alpha_halo,ybns,ybns_halo in zip(alphas_disk,alphas_halo,ybnss_disk,ybnss_halo): # reflect across hard prior bounds
+for alpha,alpha_compare,ybns,ybns_compare in zip(alphas_post,alphas_compare,ybnss_post,ybnss_compare): # reflect across hard prior bounds
  
     if ybns < 10.:
-        alphas_disk_reflect += [alpha]
-        ybnss_disk_reflect += [2.*(0.)-ybns]
+        alphas_post_reflect += [alpha]
+        ybnss_post_reflect += [2.*(0.)-ybns]
     '''            
     elif ybns > 190.:
-        alphas_disk_reflect += [alpha]
-        ybnss_disk_reflect += [2.*(1.)-ybns]
+        alphas_post_reflect += [alpha]
+        ybnss_post_reflect += [2.*(1.)-ybns]
 
     if alpha < -2.9:
-        alphas_disk_reflect += [2*(-3.)-alpha]
-        ybnss_disk_reflect += [ybns]
+        alphas_post_reflect += [2*(-3.)-alpha]
+        ybnss_post_reflect += [ybns]
         
     elif alpha > -0.4:
-        alphas_disk_reflect += [2*(-0.5)-alpha]
-        ybnss_disk_reflect += [ybns]
+        alphas_post_reflect += [2*(-0.5)-alpha]
+        ybnss_post_reflect += [ybns]
     '''
-    if ybns_halo < 10.:
-        alphas_halo_reflect += [alpha_halo]
-        ybnss_halo_reflect += [2.*(0.)-ybns_halo]
+    if ybns_compare < 10.:
+        alphas_compare_reflect += [alpha_compare]
+        ybnss_compare_reflect += [2.*(0.)-ybns_compare]
     '''            
-    elif ybns_halo > 190.:
-        alphas_halo_reflect += [alpha_halo]
-        ybnss_halo_reflect += [2.*(1.)-ybns_halo]
-
-    if alpha_halo < -2.9:
-        alphas_halo_reflect += [2*(-3.)-alpha_halo]
-        ybnss_halo_reflect += [ybns_halo]
-        
-    elif alpha_halo > -0.4:
-        alphas_halo_reflect += [2*(-0.5)-alpha_halo]
-        ybnss_halo_reflect += [ybns_halo]
+    elif ybns_compare > 190.:
+        alphas_compare_reflect += [alpha_compare]
+        ybnss_compare_reflect += [2.*(1.)-ybns_compare]
     '''
-axx.scatter(alphas[prior_idxs],ybnss[prior_idxs],marker='.',s=0.6,c='k',alpha=0.05)
-sns.kdeplot(x=list(alphas_disk)+alphas_disk_reflect,y=list(ybnss_disk)+ybnss_disk_reflect,levels=[0.1,0.32],c=sns.color_palette()[0],cut=3,axes=axx)
-sns.kdeplot(x=list(alphas_halo)+alphas_halo_reflect,y=list(ybnss_halo)+ybnss_halo_reflect,levels=[0.1],c=sns.color_palette()[0],cut=3,linewidths=1,linestyles='--',axes=axx)
+    if alpha_compare < -2.9:
+        alphas_compare_reflect += [2*(-3.)-alpha_compare]
+        ybnss_compare_reflect += [ybns_compare]
+    '''    
+    elif alpha_compare > -0.4:
+        alphas_compare_reflect += [2*(-0.5)-alpha_compare]
+        ybnss_compare_reflect += [ybns_compare]
+    '''
+axx.scatter(alphas_disk[prior_idxs],ybnss_disk[prior_idxs],marker='.',s=0.6,c='k',alpha=0.05)
+sns.kdeplot(x=list(alphas_post)+alphas_post_reflect,y=list(ybnss_post)+ybnss_post_reflect,levels=[0.1,0.32],c=color,cut=20,axes=axx)
+sns.kdeplot(x=list(alphas_compare)+alphas_compare_reflect,y=list(ybnss_compare)+ybnss_compare_reflect,levels=[0.1],c=compare_color,cut=20,linestyles='--',axes=axx)
 
 axx.set_xlim(-3.,-1.)
 axx.set_ylim(0.,30.)
-axx.set_xlabel(r'$\alpha$',fontsize=16)
-axx.set_ylabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$',fontsize=16)
+axx.set_xlabel(r'$\alpha$')#,fontsize=16)
+axx.set_ylabel(r'$m_\mathrm{ej} R_\mathrm{MW}\;[M_\odot/\mathrm{Myr}]$')#,fontsize=16)
 
 axx=plt.subplot(1, 3, 3)
 
-tmins_disk_reflect, tmins_halo_reflect, ybnss_disk_reflect, ybnss_halo_reflect = [], [], [], []
+tmins_post_reflect, tmins_compare_reflect, ybnss_post_reflect, ybnss_compare_reflect = [], [], [], []
 
-for tmin,tmin_halo,ybns,ybns_halo in zip(tmins_disk,tmins_halo,ybnss_disk,ybnss_halo): # reflect across hard prior bounds
+for tmin,tmin_compare,ybns,ybns_compare in zip(tmins_post,tmins_compare,ybnss_post,ybnss_compare): # reflect across hard prior bounds
  
     if ybns < 10.:
-        tmins_disk_reflect += [tmin]
-        ybnss_disk_reflect += [2.*(0.)-ybns]
+        tmins_post_reflect += [tmin]
+        ybnss_post_reflect += [2.*(0.)-ybns]
     '''            
     elif ybns > 190.:
-        tmins_disk_reflect += [tmin]
-        ybnss_disk_reflect += [2.*(1.)-ybns]
+        tmins_post_reflect += [tmin]
+        ybnss_post_reflect += [2.*(1.)-ybns]
 
     if tmin < 0.015:
-        tmins_disk_reflect += [np.exp(2*np.log(0.01)-np.log(tmin))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
-        ybnss_disk_reflect += [ybns]
+        tmins_post_reflect += [np.exp(2*np.log(0.01)-np.log(tmin))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
+        ybnss_post_reflect += [ybns]
   
     elif tmin > 0.9:
-        tmins_disk_reflect += [np.exp(2*np.log(2.01)-np.log(tmin))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
-        ybnss_disk_reflect += [ybns]
+        tmins_post_reflect += [np.exp(2*np.log(2.01)-np.log(tmin))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
+        ybnss_post_reflect += [ybns]
     '''
     
-    if ybns_halo < 10.:
-        tmins_halo_reflect += [tmin_halo]
-        ybnss_halo_reflect += [2.*(0.)-ybns_halo]
+    if ybns_compare < 10.:
+        tmins_compare_reflect += [tmin_compare]
+        ybnss_compare_reflect += [2.*(0.)-ybns_compare]
     '''            
-    elif ybns_halo > 190.:
-        tmins_halo_reflect += [tmin_halo]
-        ybnss_halo_reflect += [2.*(1.)-ybns_halo]
-
-    if tmin_halo < 0.015:
-        tmins_halo_reflect += [np.exp(2*np.log(0.01)-np.log(tmin_halo))] # log x-axis # [2*(0.01)-tmin] # linear x-axis
-        ybnss_halo_reflect += [ybns_halo]
-        
-    elif tmin_halo > 0.9:
-        tmins_halo_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_halo))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
-        ybnss_halo_reflect += [ybns_halo]
+    elif ybns_compare > 190.:
+        tmins_compare_reflect += [tmin_compare]
+        ybnss_compare_reflect += [2.*(1.)-ybns_compare]
+    '''
+    if tmin_compare < 0.015*1e3:
+        tmins_compare_reflect += [2*(0.01*1e3)-tmin_compare] # log x-axis # [2*(0.01)-tmin] # linear x-axis
+        ybnss_compare_reflect += [ybns_compare]
+    '''    
+    elif tmin_compare > 0.9:
+        tmins_compare_reflect += [np.exp(2*np.log(2.01)-np.log(tmin_compare))] # log x-axis # [2*(2.01)-tmin] # linear x-axis
+        ybnss_compare_reflect += [ybns_compare]
     '''
 
-axx.scatter(np.log10(tmins[prior_idxs]),ybnss[prior_idxs],marker='.',s=0.6,c='k',alpha=0.05)
-sns.kdeplot(x=np.log10(list(tmins_disk)+tmins_disk_reflect),y=list(ybnss_disk)+ybnss_disk_reflect,levels=[0.1,0.32],c=sns.color_palette()[0],cut=3,axes=axx)
-sns.kdeplot(x=np.log10(list(tmins_halo)+tmins_halo_reflect),y=list(ybnss_halo)+ybnss_halo_reflect,levels=[0.1],c=sns.color_palette()[0],cut=3,linewidths=1,linestyles='--',axes=axx)
+axx.scatter(np.log10(tmins_disk[prior_idxs]),ybnss_disk[prior_idxs],marker='.',s=0.6,c='k',alpha=0.05)
+sns.kdeplot(x=np.log10(list(tmins_post)+tmins_post_reflect),y=list(ybnss_post)+ybnss_post_reflect,levels=[0.1,0.32],c=color,cut=20,axes=axx)
+sns.kdeplot(x=np.log10(list(tmins_compare)+tmins_compare_reflect),y=list(ybnss_compare)+ybnss_compare_reflect,levels=[0.1],c=compare_color,cut=20,linestyles='--',axes=axx)
 
-axx.set_xlim(-2.,0.)
+axx.set_xlim(1.,3.)
 axx.set_ylim(0.,30.)
-axx.set_xlabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Gyr}$',fontsize=16)
+axx.set_xlabel(r'$\log_{10}\,t_\mathrm{min}/\mathrm{Myr}$')#,fontsize=16)
 axx.set_ylabel('')
 axx.set_yticklabels([])
 
 fig.subplots_adjust(wspace=0.5)
 #plt.tight_layout()
 plt.subplots_adjust(bottom=0.2)
-plt.savefig('ybns_grbbnscls.png')
+plt.savefig('ybns_grbbnscls.pdf')
+
+
+### SAVAGE-DICKEY DENSITY RATIOS
+
+kde = gaussian_kde(list(xcolls_compare)+xcolls_compare_reflect,bw_method='silverman')
+prior_kde = gaussian_kde(xcolls[::NMARG],bw_method='silverman')
+bf = float(kde(0.)/prior_kde(0.))
+
+print('Bayes factor for one channel vs two, without sGRBs')
+print(bf)
+
+kde = gaussian_kde(list(xcolls_post)+xcolls_post_reflect,bw_method='silverman')
+prior_kde = gaussian_kde(list(xcolls_disk[::NMARG])+xcolls_disk_reflect[::NMARG],bw_method='silverman')
+bf = float(kde(0.)/prior_kde(0.))
+
+print('Bayes factor for one channel vs two, given sGRBs')
+print(bf)
