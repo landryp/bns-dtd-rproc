@@ -553,4 +553,5 @@ def P_r_gtr_Renc(ts,vmean,Renc,key_PDF):
   vs_crit[ts <= 0.] = 0.
   result = P_vkick_0_vcrit(vs_crit,vmean,key_PDF=key_PDF)
   return result
+  
 #

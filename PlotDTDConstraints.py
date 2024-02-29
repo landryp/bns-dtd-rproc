@@ -36,7 +36,7 @@ POPDIR = '/home/philippe.landry/bns-dtd-rproc/dat/'
 POPPATH = 'EuFe_bns-10.h5'
 
 COMPAREDIR = '/home/philippe.landry/bns-dtd-rproc/etc/'
-COMPAREPATH = 'label_samples.dat'
+COMPAREPATH = 'Zevin22_sgrb_dtd.dat'
 
 PARTS = 1000
 NPOP = 10

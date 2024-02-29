@@ -20,7 +20,7 @@ import h5py
 import numpy.lib.recfunctions as rfn
 from tqdm import tqdm
 
-from etc.SiegelOneZone import * # import Daniel Siegel's one-zone r-process code
+from etc.rProcessUtils import * # import Daniel Siegel's one-zone r-process code
 
 
 parser = ArgumentParser(description=__doc__)
@@ -65,8 +65,8 @@ if DTDPATH != '':
     alpha, tdmin, tdmax = np.loadtxt(DTDPATH, unpack=True, skiprows=1)
     tdmin = tdmin/1e9 # convert to Gyr
     
-    alpha = np.random.choice(alpha,ndtd,False)
-    tdmin = np.random.choice(tdmin,ndtd,False)
+    alpha = np.random.choice(alpha,ndtd,False) 
+    tdmin = np.random.choice(tdmin,ndtd,False) # FIXME: need to be jointly sampled
 
 else:
     

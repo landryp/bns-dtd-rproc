@@ -10,17 +10,11 @@ philippe landry (pgjlandry@gmail.com) 02/2024
 
 ### Notebooks
 
-*these notebooks offer a demonstration of the analysis and showcase the key results.*
+*these notebooks offer a demonstration of the analysis and showcase the key results*
 
 BNS-DTD-from-rprocess.ipynb
 
 BNS-vs-two-channel-rprocess.ipynb
-
-### Installation
-
-*these are instructions for installing the analysis scripts*
-
-python3 setup.py
 
 ### Scripts
 
@@ -42,6 +36,5 @@ bash CalculateEnrichmentHistory_DAG.sh $(cat CalculateEnrichmentHistory_DAG.in) 
 condor_submit_dag calculate_batch/CalculateEnrichmentHistory.dag
 
 bash InferBNSDTD_DAG.sh $(cat InferBNSDTD_DAG.in) \
-condor_submit_dag infer_batch/InferBNSDTD.dag
-
+condor_submit_dag infer_batch/InferBNSDTD.dag \
 bash InferBNSDTD_merge.sh
