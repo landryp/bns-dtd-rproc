@@ -30,15 +30,18 @@ CalculateEnrichmentHistory.py nsamp outpath dtdpath ejpath --alpha alpha_min,alp
 
 InferBNSDTD.py outdir obspath eufepath --maxnum maxnum --parts parts *# infer binary neutron star delay time distribution parameters and fractional second-channel contribution from galactic r-process abundance observations and Eu vs Fe abundance histories*
 
-PlotDTDConstraints.py tag *# plot posterior samples in binary neutron star delay time distribution parameters, rate-mej product and second-channel contribution fraction*
+PlotDTDConstraints.py *# plot posterior samples in binary neutron star delay time distribution parameters*
+
+PlotSecondChannelConstraints.py *# plot posterior samples in binary neutron star rate-ejecta product and second-channel contribution fraction*
 
 ### Batch
 
 *the scripts in batch/ allow for the submission of batch analyses via condor*
 
-bash CalculateEnrichmentHistory_DAG.sh $(cat CalculateEnrichmentHistory_DAG.in)
+bash CalculateEnrichmentHistory_DAG.sh $(cat CalculateEnrichmentHistory_DAG.in) \
 condor_submit_dag calculate_batch/CalculateEnrichmentHistory.dag
 
-bash InferBNSDTD_DAG.sh $(cat InferBNSDTD_DAG.in)
+bash InferBNSDTD_DAG.sh $(cat InferBNSDTD_DAG.in) \
 condor_submit_dag infer_batch/InferBNSDTD.dag
+
 bash InferBNSDTD_merge.sh
