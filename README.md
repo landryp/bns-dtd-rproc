@@ -12,9 +12,9 @@ philippe landry (pgjlandry@gmail.com) 02/2024
 
 *these notebooks offer a demonstration of the analysis and showcase the key results*
 
-BNS-DTD-from-rprocess.ipynb
+BNS-DTD-from-rprocess.ipynb *# constrain binary neutron star delay times using galactic r-process abundance observations*
 
-BNS-vs-two-channel-rprocess.ipynb
+BNS-vs-two-channel-rprocess.ipynb *# perform hypothesis testing on one- vs two-channel galactic chemical evolution models, conditioned on galactic r-process abundance observations*
 
 ### Scripts
 
