@@ -16,6 +16,20 @@ BNS-DTD-from-rprocess.ipynb *# constrain binary neutron star delay times using g
 
 BNS-vs-two-channel-rprocess.ipynb *# perform hypothesis testing on one- vs two-channel galactic chemical evolution models, conditioned on galactic r-process abundance observations*
 
+### Data
+
+*the etc/ directory contains the data and utilities needed for the analysis*
+
+Arnould07_solar_rprocess.dat *# solar r-process abundances from Arnould,Goriely+Takahashi PhysRep 2007* \
+Battistini16_disk.csv *# r-process abundance measurements in galactic disk stars from Battistini+Bensby A&A 2016* \
+mej_rate_lcehl_psr+gw+nicer.dat *# binary neutron star merger rate and ejecta samples from Abbott+ PRX 2023, conditioned on neutron star equation of state information from Legred+ PRD 2021, courtesy of HY Chen* \
+mej_rate_lcehl_psr+gw.dat *# same as above, but conditioned on neutron star equation of state information from Legred+ PRD 2021, excluding x-ray pulse profile modeling by NICER, courtesy of HY Chen* \
+SAGA_MP.csv *# r-process abundance measurements in galactic disk and halo stars from the SAGA database* \
+Zevin22_sgrb_dtd.dat *# delay time distribution parameter samples inferred from short gamma-ray burst observations in Zevin+ ApJL 2022* \
+
+rProcessChemicalEvolution.py *# one-zone r-process chemical evolution code, adapted from D Siegel's*
+rProcessUtils.py *# utilities for one-zone r-process chemical evolution code, courtesy of D Siegel*
+
 ### Scripts
 
 *these scripts are used for production analyses*
