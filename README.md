@@ -8,6 +8,8 @@ philippe landry (pgjlandry@gmail.com) 02/2024
 
 *this repository contains python scripts for constraining a model for the binary neutron star delay time distribution based on r-process abundance measurements in galactic stellar spectra. the model can be conditioned on gravitational-wave and short gamma-ray burst osbervations, which constrain the binary neutron star merger rate and delay times, respectively. the model can also account for a second r-process nucleosynthesis channel whose rate evolution tracks the galactic star formation history. comparison of model evidences allows for hypothesis testing on the one- vs two-channel r-process nucleosynthesis scenarios.*
 
+for more, please see Chen,Landry,Read+Siegel arXiv:2402.03696
+
 ### Notebooks
 
 *these notebooks offer a demonstration of the analysis and showcase the key results*
