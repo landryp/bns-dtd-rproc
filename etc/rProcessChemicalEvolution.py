@@ -100,21 +100,23 @@ def rproc_evolution(R_NSNS_z0,m_r_NS,b_NS,tmin_NS,Xcoll=0.,f_NSgal=0.5,nppdt=20)
 	else: m_Eu_coll = 0.
 
 	Rates_NS = []
-	Rates_NS_r = []
+	#Rates_NS_r = []
 	Ns_NS = []
 
 	Rate_CC = norm_cc*psi_z(zs_ts, SFR=key_SFR)
 	Rate_MHDSN = norm_MHDSN*psi_z(zs_ts, SFR=key_SFR)
+	Rate_coll = norm_coll*psi_z(zs_ts, SFR=key_SFR)
 
 	NS_cutoff=False
 	for nb_NS, b_NS_ in enumerate(b_NS):
 		Rates_NS.append(array([int_NS(t,ts,tmin_NS,norms_DTD_NS[nb_NS],b_NS_,psi_t_tab,tmin_intMW,v_mean,R_enc,key_PDF_vkick,cutoff=False) for t in ts]) )
-		Rates_NS_r.append(array([int_NS(t,ts,tmin_NS,norms_DTD_NS[nb_NS],b_NS_,psi_t_tab,tmin_intMW,v_mean,R_enc,key_PDF_vkick,cutoff=NS_cutoff) for t in ts]) )
+		#Rates_NS_r.append(array([int_NS(t,ts,tmin_NS,norms_DTD_NS[nb_NS],b_NS_,psi_t_tab,tmin_intMW,v_mean,R_enc,key_PDF_vkick,cutoff=NS_cutoff) for t in ts]) )
 
 	Rate_Ia = array([int_Ia(t,ts,tmin_Ia,norm_DTD_Ia,b_Ia,psi_t_tab,tmin_intMW) for t in ts])
 
 	N_CC = array([integrate(Rate_CC, ts, tmin_intMW, t, method = 'auto') for t in ts])
 	N_MHDSN = array([integrate(Rate_MHDSN, ts, tmin_intMW, t, method = 'auto') for t in ts])
+	N_coll = array([integrate(Rate_coll, ts, tmin_intMW, t, method = 'auto') for t in ts])
 	for nb_NS, b_NS_ in enumerate(b_NS):
 		N_NS = array([integrate(Rates_NS[nb_NS], ts, tmin_intMW, t, method = 'auto') for t in ts])
 		Ns_NS.append(N_NS)
@@ -124,6 +126,7 @@ def rproc_evolution(R_NSNS_z0,m_r_NS,b_NS,tmin_NS,Xcoll=0.,f_NSgal=0.5,nppdt=20)
 	Rate_CC_av = N_CC[-1]/(tmax-tmin_intMW)
 	Rate_MHDSN_av = N_MHDSN[-1]/(tmax-tmin_intMW)
 	Rate_NS_av = N_NS[-1]/(tmax-tmin_intMW)
+	Rate_coll_av = N_coll[-1]/(tmax-tmin_intMW)
 
 	nnss = len(b_NS)
 	arr_sols_alpha = zeros((nnss,len(ts)))
@@ -160,4 +163,8 @@ def rproc_evolution(R_NSNS_z0,m_r_NS,b_NS,tmin_NS,Xcoll=0.,f_NSgal=0.5,nppdt=20)
 		Fe_H = log10(NFe_NH/NFe_NH_sun)
 		r_Fe = log10(Nr_NFe/Nr_NFe_sun)    
 
-	return Fe_H, r_Fe
+	Rate_NS = np.array(Rates_NS[0])
+	Rate_coll = np.array(Rate_coll)
+	Rate_X = Rate_coll/(Rate_coll+Rate_NS*m_Eu_NS/m_Eu_coll)
+
+	return Fe_H, r_Fe, (Rate_NS, Rate_coll, Rate_X, ts)

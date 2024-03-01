@@ -20,6 +20,7 @@ import h5py
 import numpy.lib.recfunctions as rfn
 from tqdm import tqdm
 
+from etc.rProcessChemicalEvolution import rproc_evolution
 from etc.rProcessUtils import * # import Daniel Siegel's one-zone r-process code
 
 
@@ -28,7 +29,7 @@ parser.add_argument('nsamp')
 parser.add_argument('outpath')
 parser.add_argument('dtdpath')
 parser.add_argument('ejpath')
-parser.add_argument('-s','--solpath',default='etc/arnould_07_solar_r-process.txt')
+parser.add_argument('-s','--solpath',default='etc/Arnould07_solar_rprocess.dat')
 parser.add_argument('-a','--alpha',default="-3.,-0.5")
 parser.add_argument('-t','--tmin',default="1e-2,2.01")
 parser.add_argument('-x','--xsfh',default="1e-3,0.999")
@@ -43,7 +44,7 @@ SOLARPATH = str(args.solpath) # 'etc/arnould_07_solar_r-process.txt' # solar abu
 ALPHA_BOUNDS = [float(bnd) for bnd in str(args.alpha).split(',')] # (-3.,-0.5) # bounds for uniform prior DTD power law index
 TDMIN_BOUNDS = [float(bnd) for bnd in str(args.tmin).split(',')] # (1e-2,2.01) # bounds for log-uniform prior on minimum delay time in Gyr # see below for option to change to uniform prior
 EU_RATIO_Z0_BOUNDS = [float(bnd) for bnd in str(args.xsfh).split(',')] # (1e-6,1.) # bounds for log-uniform prior on fractional contribution of collapsar channel to local r-process mass*rate density (i.e. m_Eu_coll*norm_coll/(m_Eu_coll*norm_coll + m_Eu_bns*norm_bns)) # see below for option to change to uniform prior
-NUM_MARG = int(args.marg) # 100 # number of mej and rate samples per DTD sample
+NUM_MARG = int(args.nmarg) # 100 # number of mej and rate samples per DTD sample
 
 
 ### SAMPLE FROM PRIORS
@@ -62,11 +63,12 @@ ndtd = NUM # number of DTD samples to draw
 
 if DTDPATH != '':
     
-    alpha, tdmin, tdmax = np.loadtxt(DTDPATH, unpack=True, skiprows=1)
-    tdmin = tdmin/1e9 # convert to Gyr
+	alpha, tdmin, tdmax = np.loadtxt(DTDPATH, unpack=True, skiprows=1)
+	tdmin = tdmin/1e9 # convert to Gyr
     
-    alpha = np.random.choice(alpha,ndtd,False) 
-    tdmin = np.random.choice(tdmin,ndtd,False) # FIXME: need to be jointly sampled
+	idxs = np.random.choice(range(len(alpha)),ndtd,False)
+	alpha = alpha[idxs]
+	tdmin = tdmin[idxs]
 
 else:
     
@@ -169,109 +171,25 @@ Eu_ratio_z0s = Eu_ratio_z0[dtd_idxs] #np.random.choice(Eu_ratio_z0,nsamps,False)
 
 Fe_H_list = []
 r_Fe_list = []
+Rbns_of_t_list = []
+Rcoll_of_t_list = []
+X_of_t_list = []
+t_list = []
 bns_dat = np.zeros((ndtd*nsamps,6))
 
 for i,(alpha,tdmin,Xcoll) in tqdm(enumerate(zip(alphas,tdmins,Eu_ratio_z0s))):
-    
-    for j,(mej,rate,f_NSgal) in enumerate(zip(mejs,rates,fNSs)):
-    
-        m_r_NS = mej
-        b_NS = [-alpha]
-        tmin_NS = tdmin
 
-        dt_max = min(tmin_NS,tmin_Ia,tmin) / nppdt # max step size
-        n_dt_max = int(round((tmax - tmin) / dt_max)) # number of grid points
-        ts = linspace(tmin,tmax,n_dt_max)
-        zs_ts = z_t(ts,t_int_min)
+	for j,(mej,rate,f_NSgal) in enumerate(zip(mejs,rates,fNSs)):
 
-        ts_tab = ts
-        psi_t_tab = psi_t(ts_tab, t_int_min,SFR = key_SFR) # SFR [Msun Mpc^-3 Gyr^-1]  
-        psi_t_tab_MW = psi_t_tab / rho_MW # SFR per Milky Way equivalent galaxy [Msun/Gyr/MWEG]
+		Fe_H, r_Fe, R_of_ts = rproc_evolution(rate,mej,-alpha,tdmin,Xcoll,f_NSgal,nppdt)
+		Fe_H_list += [Fe_H]
+		r_Fe_list += [r_Fe]
+		Rbns_of_t_list += [R_of_ts[0]]
+		Rcoll_of_t_list += [R_of_ts[1]]
+		X_of_t_list += [R_of_ts[2]] # FIXME: this is X of production at z, but we want cumulative X up to z
+		t_list += [R_of_ts[3]]
 
-        R_coll_z0 = psi_t_tab[-1] # local volumetric collapsar rate, set to match SFR -- infer this in combination with m_r_coll
-
-        R_NSNS_z0 = rate*1e9 / (1e3)**3  #1540. *1e9 / (1e3)**3 # LIGO rate of NSNS mergers (1540 Gpc^-3 yr^-1) in Mpc^-3 Gyr^-1
-        m_Eu_NS = m_r_NS * Xsun_Eu_r69
-
-        norms_DTD_NS = []
-        for nb_NS, b_NS_ in enumerate(b_NS):
-            norms_DTD_NS.append(R_NSNS_z0 / int_NS(tmax,ts,tmin_NS,1.0,b_NS_,psi_t_tab,tmin_intMW,v_mean,R_enc,key_PDF_vkick,cutoff=False))
-
-        DIa = D_t(tmax-ts,1.0,b_Ia,tmin_Ia)
-        norm_DTD_Ia = C_Ia / integrate(DIa, ts, tmin_intMW, tmax, method = 'auto')
-        DIacheck = D_t(tmax-ts,norm_DTD_Ia,b_Ia,tmin_Ia)
-
-        norm_cc = R_cc_z0 / psi_t_tab[-1]
-        norm_MHDSN = R_MHDSN_z0 / psi_t_tab[-1]
-        norm_coll = R_coll_z0 / psi_t_tab[-1] # collapsars enters into abundance calculation via m_Eu_coll*norm_coll
-
-        m_Eu_coll = m_Eu_NS*R_NSNS_z0/((1./Xcoll - 1.)*R_coll_z0) # collapsar Eu yield
-        #m_r_coll = m_Eu_coll/Xsun_Eu_r69 # collapsar r-process -- infer this in combination with R_coll_z0
-
-        Rates_NS = []
-        Rates_NS_r = []
-        Ns_NS = []
-
-        Rate_CC = norm_cc*psi_z(zs_ts, SFR=key_SFR)
-        Rate_MHDSN = norm_MHDSN*psi_z(zs_ts, SFR=key_SFR)
-
-        NS_cutoff=False
-        for nb_NS, b_NS_ in enumerate(b_NS):
-            Rates_NS.append(array([int_NS(t,ts,tmin_NS,norms_DTD_NS[nb_NS],b_NS_,psi_t_tab,tmin_intMW,v_mean,R_enc,key_PDF_vkick,cutoff=False) for t in ts]) )
-            Rates_NS_r.append(array([int_NS(t,ts,tmin_NS,norms_DTD_NS[nb_NS],b_NS_,psi_t_tab,tmin_intMW,v_mean,R_enc,key_PDF_vkick,cutoff=NS_cutoff) for t in ts]) )
-
-        Rate_Ia = array([int_Ia(t,ts,tmin_Ia,norm_DTD_Ia,b_Ia,psi_t_tab,tmin_intMW) for t in ts])
-
-        N_CC = array([integrate(Rate_CC, ts, tmin_intMW, t, method = 'auto') for t in ts])
-        N_MHDSN = array([integrate(Rate_MHDSN, ts, tmin_intMW, t, method = 'auto') for t in ts])
-        for nb_NS, b_NS_ in enumerate(b_NS):
-            N_NS = array([integrate(Rates_NS[nb_NS], ts, tmin_intMW, t, method = 'auto') for t in ts])
-            Ns_NS.append(N_NS)
-
-        N_Ia = array([integrate(Rate_Ia, ts, tmin_intMW, t, method = 'auto') for t in ts])
-
-        Rate_CC_av = N_CC[-1]/(tmax-tmin_intMW)
-        Rate_MHDSN_av = N_MHDSN[-1]/(tmax-tmin_intMW)
-        Rate_NS_av = N_NS[-1]/(tmax-tmin_intMW)
-
-        nnss = len(b_NS)
-        arr_sols_alpha = zeros((nnss,len(ts)))
-        arr_sols_r = zeros((nnss,len(ts)))
-        arr_sols_Fe = zeros((nnss,len(ts)))
-        arr_sols_H = zeros((nnss,len(ts)))
-        arr_sols_fZs = zeros((nnss,len(ts)))
-
-        NS_only=False # turn collapsars on
-        GRB_cutoff=False
-        GRB_FeH_thr=-0.312,0.058
-        add_MHD_SNe=False
-        for nb_NS, b_NS_ in enumerate(b_NS):  
-            sola, solr, solFe, solH, f_Z = integrate_chemical_evolution(ts,tmin_NS,[tmin_Ia],m_alpha,m_Eu_NS,m_Eu_coll,m_Eu_MHDSN,m_Fe_cc,m_Fe_Ia,m_Fe_coll,X_H,
-               norm_cc,norm_MHDSN,norm_coll,[norm_DTD_Ia],norms_DTD_NS[nb_NS],f_NSgal,b_Ia,b_NS_,eta,psi_t_tab_MW,tmin_intMW,NS_only,v_mean,R_enc,key_PDF_vkick,NS_cutoff,GRB_cutoff,GRB_FeH_thr,m_Fe_u,t_sun,add_MHD_SNe)
-
-            arr_sols_alpha[nb_NS,:] = sola
-            arr_sols_r[nb_NS,:] = solr[0]
-            arr_sols_Fe[nb_NS,:] = solFe[0]
-            arr_sols_H[nb_NS,:] = solH
-            arr_sols_fZs[nb_NS,:] = f_Z[0]
-
-        for nb_NS, b_NS_ in enumerate(b_NS):
-          NFe_NH = (arr_sols_Fe[nb_NS][1:])/arr_sols_H[nb_NS][1:] * (1./m_Fe_u)
-          NFe_NH_sun = NFe_NH[ts[1:] >= t_sun][0]
-
-          Nr_NFe = (arr_sols_r[nb_NS][1:]/arr_sols_Fe[nb_NS][1:]) * (m_Fe_u / m_Eu_u)
-          Nr_NFe_sun = Nr_NFe[ts[1:] >= t_sun][0]
-
-          if (normalize_to_observed_solar_values):
-            Fe_H = log10(NFe_NH) - logNFe_NH_sun
-            r_Fe = log10(Nr_NFe) - logNEu_NFe_sun
-          else:
-            Fe_H = log10(NFe_NH/NFe_NH_sun)
-            r_Fe = log10(Nr_NFe/Nr_NFe_sun)    
-
-        Fe_H_list.append(Fe_H)
-        r_Fe_list.append(r_Fe)
-        bns_dat[nsamps*i+j,:] = array([mej,rate,-alpha,tmin_NS,f_NSgal,Xcoll])
+		bns_dat[nsamps*i+j,:] = array([mej,rate,-alpha,tdmin,f_NSgal,Xcoll])
 
     
 ### SAVE RESULTS
@@ -282,6 +200,7 @@ for i,(alpha,tdmin,Xcoll) in tqdm(enumerate(zip(alphas,tdmins,Eu_ratio_z0s))):
 outdat = {}
 outdat['pop'] = {}
 outdat['yield'] = {}
+outdat['frac'] = {}
 
 for i in range(nsamps*ndtd):
 
@@ -289,21 +208,30 @@ for i in range(nsamps*ndtd):
     outdat['yield'][i] = {}
     outdat['yield'][i]['Fe_H'] = Fe_H_list[i]
     outdat['yield'][i]['Eu_Fe'] = r_Fe_list[i]
-    
+    outdat['frac'][i] = {}
+    outdat['frac'][i]['Rbns'] = Rbns_of_t_list[0]
+    outdat['frac'][i]['Rcoll'] = Rcoll_of_t_list[0]
+    outdat['frac'][i]['X'] = X_of_t_list[0]
+    outdat['frac'][i]['t'] = t_list[0]
+
 outfile = h5py.File(OUTPATH, 'w')
 
 pop_set = outfile.create_group('pop')
 for key, value in outdat['pop'].items():
     pop_data = np.array(value)
-    pop_data = rfn.unstructured_to_structured(pop_data,
-    np.dtype([('m_ej', 'f8'), ('rate', 'f8'), ('b', 'f8'), ('tmin', 'f8'), ('f', 'f8'), ('X_coll', 'f8')]))
+    pop_data = rfn.unstructured_to_structured(pop_data, np.dtype([('m_ej', 'f8'), ('rate', 'f8'), ('b', 'f8'), ('tmin', 'f8'), ('f', 'f8'), ('X_coll', 'f8')]))
     pop_set.create_dataset(str(key),data=pop_data)
 
 yield_set = outfile.create_group('yield')
 for key, value in outdat['yield'].items():
     yield_data = np.column_stack((value['Fe_H'],value['Eu_Fe']))
-    yield_data = rfn.unstructured_to_structured(yield_data,
-    np.dtype([('Fe_H', 'f8'), ('Eu_Fe', 'f8')]))
+    yield_data = rfn.unstructured_to_structured(yield_data, np.dtype([('Fe_H', 'f8'), ('Eu_Fe', 'f8')]))
     yield_set.create_dataset(str(key),data=yield_data)
+    
+frac_set = outfile.create_group('frac')
+for key, value in outdat['frac'].items():
+    frac_data = np.column_stack((value['Rbns'],value['Rcoll'],value['X'],value['t']))
+    frac_data = rfn.unstructured_to_structured(frac_data, np.dtype([('Rbns', 'f8'), ('Rcoll', 'f8'), ('X', 'f8'), ('t', 'f8')]))
+    frac_set.create_dataset(str(key),data=frac_data)
 
 outfile.close()
