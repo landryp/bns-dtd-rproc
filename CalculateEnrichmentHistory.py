@@ -15,12 +15,13 @@ __date__ = '09-2023'
 
 from argparse import ArgumentParser
 import numpy as np
-import scipy
+from scipy.stats import loguniform
+from scipy.integrate import cumtrapz
 import h5py
 import numpy.lib.recfunctions as rfn
 from tqdm import tqdm
 
-from etc.rProcessChemicalEvolution import rproc_evolution
+from etc.rProcessChemicalEvolution import rproc_evolution, Xsun_Eu_r69
 from etc.rProcessUtils import * # import Daniel Siegel's one-zone r-process code
 
 
@@ -67,84 +68,22 @@ if DTDPATH != '':
 	tdmin = tdmin/1e9 # convert to Gyr
     
 	idxs = np.random.choice(range(len(alpha)),ndtd,False)
-	alpha = alpha[idxs]
-	tdmin = tdmin[idxs]
+	alphas = alpha[idxs]
+	tdmins = tdmin[idxs]
 
 else:
     
-    alpha = np.random.uniform(*ALPHA_BOUNDS,ndtd) # uniform prior on DTD power law index
-    tdmin = scipy.stats.loguniform.rvs(*TDMIN_BOUNDS,size=ndtd) # log-uniform prior on minimum delay time in Gyr # np.random.uniform(*TDMIN_BOUNDS,ndtd) # uniform prior on minimum delay time in Gyr
+    alphas = np.random.uniform(*ALPHA_BOUNDS,ndtd) # uniform prior on DTD power law index
+    tdmins = loguniform.rvs(*TDMIN_BOUNDS,size=ndtd) # log-uniform prior on minimum delay time in Gyr # np.random.uniform(*TDMIN_BOUNDS,ndtd) # uniform prior on minimum delay time in Gyr
 
 
 # sample in collapsar yield
 
-# Eu_ratio_z0 = scipy.stats.loguniform.rvs(*EU_RATIO_Z0_BOUNDS,size=ndtd) # log-uniform prior on ratio of collapsar to total Eu abundance at z=0 
-Eu_ratio_z0 = np.random.uniform(*EU_RATIO_Z0_BOUNDS,ndtd) # uniform prior on ratio of collapsar to total Eu abundance at z=0
+# Eu_ratio_z0 = loguniform.rvs(*EU_RATIO_Z0_BOUNDS,size=ndtd) # log-uniform prior on ratio of collapsar to total Eu abundance at z=0 
+Eu_ratio_z0s = np.random.uniform(*EU_RATIO_Z0_BOUNDS,ndtd) # uniform prior on ratio of collapsar to total Eu abundance at z=0
 
 
-### DO R-PROCESS ABUNDANCE CALCULATION
-
-
-# settings for r-process yield calculation
-
-key_SFR='MF17' # star formation rate
-
-m_Mg = 0.12 # Mg yield per enrichment event in Msun
-m_alpha = m_Mg # He
-
-nppdt = 20 # number of timesteps in chemical evolution integration
-t_int_min = t_z(zmax_int) # minimum cosmic time to start integration
-t_sun = t_z(0.) - age_sun # cosmic time at birth of sun in Gyr
-tmin = t_z(zmax_int)
-tmax = t_z(0.) # age of the universe
-tmin_intMW = tmin
-
-# supernovae
-
-m_Fe_cc = 0.074 # CCSN Fe yield per enrichment event in Msun
-m_Fe_Ia = 0.7 # IaSN Fe
-m_Eu_MHDSN = 1.4e-5  # MHD SN Eu
-
-P_MHDSN = 0.3  # percentage of MHD SN among CCSN
-C_Ia = 1.3e-3 # calibration for IaSN
-
-b_Ia = 1.0 # IaSN DTD power law exponent
-tmin_Ia = 0.4 # DTD tmin for IaSN in Gyr
-
-key_PDF_vkick='exp' # kick distribution
-v_mean = 180. # mean kick velocity in [km/s]
-
-R_cc_z0 = 0.705 * 1e-4 * 1e9 # local volumetric CCSN rate
-R_MHDSN_z0 = P_MHDSN * 1e-2 * R_cc_z0 # local volumetric MHD SN rate
-
-# collapsars
-
-Asun, Nsun = loadtxt(SOLARPATH, unpack=True) # Nsun is number of atoms, normalized to 10^6 Si atoms (i.e., N_Si = 1e6)
-Asun = Asun[Nsun > 0.]
-Nsun = Nsun[Nsun > 0.]
-
-Xsun = 0.7110 * Nsun * Asun / 2.431e10 # Lodders 2003, Table 2, proto-solar abundances ("solar system abundances")
-X_r_tot69 = sum(Xsun[Asun >= 69]) # 1st peak # hydrogen mass fraction: X_H0 = 0.7110
-
-Xsun_Eu = Xsun[Asun == 151] + Xsun[Asun == 153] # solar mass fraction of all Eu isotopes
-Xsun_Eu = Xsun_Eu[0]
-Xsun_Eu_r69 = Xsun_Eu / X_r_tot69 # Eu mass fraction for r-process starting at A=69
-
-m_Fe_coll = 0.0 # collapsar Fe -- keep this zero
-
-# galactic enrichment
-
-X_H = 0.75 # ISM H mass fraction
-eta = 0.25 # outflow rate (<1) normalized by star formation rate ("o" in Hotokezaka 2018)
-
-r_eff_MW = 6.7e3 * pc * 1e-3 # effective Milky Way radius in km
-f_r_eff_MW = 2. # boundary factor for r-process enrichment of Milky Way
-R_enc = 0.5 *r_eff_MW * f_r_eff_MW # radius within which events contribute to Milky Way r-process enrichment
-
-normalize_to_observed_solar_values = 1
-
-
-# match up ejecta, DTD and collapsar fraction samples to make population realizations
+# sample in BNS rate and ejecta
 
 nsamps = NUM_MARG # number of rate, mej samples per r-process yield prediction
 
@@ -159,67 +98,56 @@ else:
     mejs = mej[ej_idxs]
     rates = rate[ej_idxs]
 
-fNSs = np.full(nsamps,0.5) #np.random.uniform(0.,1.,nsamps) # uniform prior on BNS enrichment efficiency -- marginalize over this #np.random.choice(fNS,nsamps,False) # sample in BNS enrichment efficiency
 
-dtd_idxs = np.arange(ndtd) #np.random.choice(range(len(alpha)),ndtd,False) # sample in delay time distribution
-alphas = alpha[dtd_idxs]
-tdmins = tdmin[dtd_idxs]
-Eu_ratio_z0s = Eu_ratio_z0[dtd_idxs] #np.random.choice(Eu_ratio_z0,nsamps,False) # sample in collapsar Eu abundance fractions
+### DO R-PROCESS ABUNDANCE CALCULATION
 
 
 # do r-process yield calculation, using Daniel Siegel's one-zone model
-
-Fe_H_list = []
-r_Fe_list = []
-Rbns_of_t_list = []
-Rcoll_of_t_list = []
-X_of_t_list = []
-t_list = []
-bns_dat = np.zeros((ndtd*nsamps,6))
-
-for i,(alpha,tdmin,Xcoll) in tqdm(enumerate(zip(alphas,tdmins,Eu_ratio_z0s))):
-
-	for j,(mej,rate,f_NSgal) in enumerate(zip(mejs,rates,fNSs)):
-
-		Fe_H, r_Fe, R_of_ts = rproc_evolution(rate,mej,-alpha,tdmin,Xcoll,f_NSgal,nppdt)
-		Fe_H_list += [Fe_H]
-		r_Fe_list += [r_Fe]
-		Rbns_of_t_list += [R_of_ts[0]]
-		Rcoll_of_t_list += [R_of_ts[1]]
-		X_of_t_list += [R_of_ts[2]] # FIXME: this is X of production at z, but we want cumulative X up to z
-		t_list += [R_of_ts[3]]
-
-		bns_dat[nsamps*i+j,:] = array([mej,rate,-alpha,tdmin,f_NSgal,Xcoll])
-
-    
-### SAVE RESULTS
-    
-    
-# save r-process abundance data and parameters for population realizations
 
 outdat = {}
 outdat['pop'] = {}
 outdat['yield'] = {}
 outdat['frac'] = {}
 
-for i in range(nsamps*ndtd):
+for i,(alpha,tdmin,Xcoll) in tqdm(enumerate(zip(alphas,tdmins,Eu_ratio_z0s))):
+	for j,(mej,rate) in enumerate(zip(mejs,rates)):
 
-    outdat['pop'][i] = bns_dat[i]
-    outdat['yield'][i] = {}
-    outdat['yield'][i]['Fe_H'] = Fe_H_list[i]
-    outdat['yield'][i]['Eu_Fe'] = r_Fe_list[i]
-    outdat['frac'][i] = {}
-    outdat['frac'][i]['Rbns'] = Rbns_of_t_list[0]
-    outdat['frac'][i]['Rcoll'] = Rcoll_of_t_list[0]
-    outdat['frac'][i]['X'] = X_of_t_list[0]
-    outdat['frac'][i]['t'] = t_list[0]
+		idx = nsamps*i+j
+
+		Fe_H, r_Fe, rate_evolutions = rproc_evolution(rate,mej,-alpha,tdmin,Xcoll,f_NSgal=0.5,nppdt=20)
+		
+		Rbns, Rcoll, Xs, zs, ts = rate_evolutions
+		
+		outdat['pop'][idx] = np.array([mej,rate,alpha,tdmin,Xcoll])
+		outdat['yield'][idx] = {}
+		outdat['yield'][idx]['Fe_H'] = Fe_H
+		outdat['yield'][idx]['Eu_Fe'] = r_Fe
+		outdat['frac'][idx] = {}
+		outdat['frac'][idx]['Rbns'] = Rbns
+		outdat['frac'][idx]['Rcoll'] = Rcoll
+		outdat['frac'][idx]['z'] = zs
+		outdat['frac'][idx]['t'] = ts
+		
+		Rcoll0 = Rcoll[-1]
+		mcoll = mej*Xsun_Eu_r69*rate/((1./Xcoll - 1.)*Rcoll0)
+		num = cumtrapz(mej*Rbns,ts)
+		denom = cumtrapz(mcoll*Rcoll,ts)
+		Xts = 1./(1.+num/denom)
+		
+		outdat['frac'][idx]['X'] = list(Xts)+[Xts[-1]]
+
+
+### SAVE RESULTS
+    
+    
+# save r-process abundance data and popoulatio parameters
 
 outfile = h5py.File(OUTPATH, 'w')
 
 pop_set = outfile.create_group('pop')
 for key, value in outdat['pop'].items():
     pop_data = np.array(value)
-    pop_data = rfn.unstructured_to_structured(pop_data, np.dtype([('m_ej', 'f8'), ('rate', 'f8'), ('b', 'f8'), ('tmin', 'f8'), ('f', 'f8'), ('X_coll', 'f8')]))
+    pop_data = rfn.unstructured_to_structured(pop_data, np.dtype([('mej', 'f8'), ('rate', 'f8'), ('alpha', 'f8'), ('tmin', 'f8'), ('X0', 'f8')]))
     pop_set.create_dataset(str(key),data=pop_data)
 
 yield_set = outfile.create_group('yield')
@@ -230,8 +158,8 @@ for key, value in outdat['yield'].items():
     
 frac_set = outfile.create_group('frac')
 for key, value in outdat['frac'].items():
-    frac_data = np.column_stack((value['Rbns'],value['Rcoll'],value['X'],value['t']))
-    frac_data = rfn.unstructured_to_structured(frac_data, np.dtype([('Rbns', 'f8'), ('Rcoll', 'f8'), ('X', 'f8'), ('t', 'f8')]))
+    frac_data = np.column_stack((value['Rbns'],value['Rcoll'],value['X'],value['z'],value['t']))
+    frac_data = rfn.unstructured_to_structured(frac_data, np.dtype([('Rbns', 'f8'), ('Rcoll', 'f8'), ('X', 'f8'), ('z', 'f8'), ('t', 'f8')]))
     frac_set.create_dataset(str(key),data=frac_data)
 
 outfile.close()

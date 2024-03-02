@@ -165,6 +165,7 @@ def rproc_evolution(R_NSNS_z0,m_r_NS,b_NS,tmin_NS,Xcoll=0.,f_NSgal=0.5,nppdt=20)
 
 	Rate_NS = np.array(Rates_NS[0])
 	Rate_coll = np.array(Rate_coll)
-	Rate_X = Rate_coll/(Rate_coll+Rate_NS*m_Eu_NS/m_Eu_coll)
+	if Xcoll > 0.: Rate_X = m_Eu_coll*Rate_coll/(m_Eu_coll*Rate_coll+Rate_NS*m_Eu_NS)
+	else: Rate_X = np.full(len(Rate_NS),0.)
 
-	return Fe_H, r_Fe, (Rate_NS, Rate_coll, Rate_X, ts)
+	return Fe_H, r_Fe, (Rate_NS, Rate_coll, Rate_X, zs_ts, ts)

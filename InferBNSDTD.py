@@ -15,6 +15,7 @@ __date__ = '09-2023'
 from argparse import ArgumentParser
 import numpy as np
 from scipy.stats import multivariate_normal
+from scipy.integrate import cumtrapz
 import os
 import h5py
 from tqdm import tqdm
@@ -74,7 +75,7 @@ like_funcs = [multivariate_normal(mean,std) for mean,std in zip(saga_like_means,
 
 # load abundance predictions, map likelihoods to delay time distribution parameters and calculate likelihood for abundance predictions
 
-alphas, tmins, xcolls, rates, mejs = [], [], [], [], []
+alphas, tmins, xcolls, rates, mejs, Rbnss, Rcolls, ts = [], [], [], [], [], [], [], []
 log_like = []
 
 k = 0
@@ -92,11 +93,11 @@ if PARTS is None:
         pop_dat = pop_dat_i[str(j)]
         yield_dat = yield_dat_i[str(j)]
         
-        alphas += [-pop_dat['b']]
+        alphas += [pop_dat['alpha']]
         tmins += [pop_dat['tmin']]
-        xcolls += [pop_dat['X_coll']]
+        xcolls += [pop_dat['X0']]
         rates += [pop_dat['rate']]
-        mejs += [pop_dat['m_ej']]
+        mejs += [pop_dat['mej']]
         
         curve = np.column_stack((yield_dat['Fe_H'],yield_dat['Eu_Fe']))
         curve = curve[np.where(curve[:,1] >= -5.)[0][0]:]
@@ -124,11 +125,11 @@ else:
             pop_dat = pop_dat_i[str(j)]
             yield_dat = yield_dat_i[str(j)]
 
-            alphas += [-pop_dat['b']]
+            alphas += [pop_dat['alpha']]
             tmins += [pop_dat['tmin']]
-            xcolls += [pop_dat['X_coll']]
+            xcolls += [pop_dat['X0']]
             rates += [pop_dat['rate']]
-            mejs += [pop_dat['m_ej']]
+            mejs += [pop_dat['mej']]
 
             curve = np.column_stack((yield_dat['Fe_H'],yield_dat['Eu_Fe']))
             curve = curve[np.where(curve[:,1] >= -5.)[0][0]:]
