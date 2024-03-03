@@ -51,7 +51,7 @@ if not os.path.exists(OUTDIR):
 
 # load SAGA data
 
-FeHs, EuFes, FeH_errs, EuFe_errs = np.loadtxt(EUFEPATH, unpack=True, delimiter=',', skiprows=1)
+FeHs, EuFes, FeH_errs, EuFe_errs = np.loadtxt(OBSPATH, unpack=True, delimiter=',', skiprows=1)
 
 
 # make gaussian likelihood model for each SAGA datapoint
@@ -151,8 +151,8 @@ if NUM is None: NUM = npops
 
 # save delay time distribution parameter likelihoods
 
-if TAG is None: OUTPATH = OUTDIR+'/'+(EUFEPATH.split('/')[-1]).split('.')[0]+'_{0}.csv'.format(NUM)
-else: OUTPATH = OUTDIR+'/'+(EUFEPATH.split('/')[-1]).split('.')[0]+'_{0}.{1}.csv'.format(NUM,TAG)
+if TAG is None: OUTPATH = OUTDIR+'/'+(OBSPATH.split('/')[-1]).split('.')[0]+'_{0}.csv'.format(NUM)
+else: OUTPATH = OUTDIR+'/'+(OBSPATH.split('/')[-1]).split('.')[0]+'_{0}.{1}.csv'.format(NUM,TAG)
 
 outdat = np.column_stack((alphas,tmins,xcolls,mejs,rates,log_like))
 np.savetxt(OUTPATH,outdat,delimiter=',',comments='',header='alpha,tmin,xcoll,mej,rate,log_likelihood')
