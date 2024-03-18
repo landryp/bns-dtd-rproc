@@ -49,16 +49,17 @@ compare_color = 'gold'
 
 tag = 'bns'
 
+FEH_MIN, FEH_MAX = (-3.,0.5)
+NFEH = int((FEH_MAX-FEH_MIN)/0.05) # Fe grid spacing for confidence intervals
+FeH_grid = np.linspace(FEH_MIN,FEH_MAX,NFEH)
+
 
 ### LOADING INPUTS
 
 
-# load SAGA data
+# load disk and disk+halo star observations for plotting
 
 FeHs, EuFes, FeH_errs, EuFe_errs = np.loadtxt(DATADIR+EUPATH, unpack=True, delimiter=',', skiprows=1)
-
-
-# load disk data
 
 FeHs_disk, EuFes_disk, FeH_errs_disk, EuFe_errs_disk = np.loadtxt(DATADIR+EUPATH_DISK, unpack=True, delimiter=',', skiprows=1)
 
@@ -75,13 +76,11 @@ alphas_disk, tmins_disk, xcolls_disk, mejs_disk, rates_disk, loglikes_disk = np.
 ybnss_disk = np.array(rates_disk)*np.array(mejs_disk)
 
 loglikes_disk = loglikes_disk - np.max(loglikes_disk)
-
 likes_disk = np.exp(loglikes_disk)
 max_idx_disk = np.argmax(loglikes_disk)
 
 npops_disk = len(alphas_disk)
 neff_disk = np.sum(np.array(likes_disk))**2/np.sum(np.array(likes_disk)**2)
-print('\n')
 print(LIKEDIR_DISK+LIKEPATH_DISK)
 print('number of samples: {0}\n'.format(npops_disk),'number of effective samples: {0}'.format(neff_disk))
 
@@ -89,68 +88,81 @@ print('number of samples: {0}\n'.format(npops_disk),'number of effective samples
 # load abundance predictions
 
 keys = [str(key) for key in range(PARTS)]
-eu_pts_list, rates, mejs = [], [], []
-
-fe_grid = np.arange(-3.,0.5,0.05)
-
-k = 0
+EuFe_pts = []
 
 for key in tqdm(keys):
     INPUTPATH = POPDIR+'.'.join(POPPATH.split('.')[:-1])+'.part{0}'.format(key)+'.'+POPPATH.split('.')[-1]
 
     inputdat = h5py.File(INPUTPATH, 'r')
     yield_dat_i = inputdat['yield']
-    pop_dat_i = inputdat['pop']
     
     for j in range(len(yield_dat_i)):
     
         yield_dat = yield_dat_i[str(j)]
-        pop_dat = pop_dat_i[str(j)]
         func = interp1d(yield_dat['Fe_H'],yield_dat['Eu_Fe'],bounds_error=False)
-        eu_pts = func(fe_grid)
-        eu_pts_list += [eu_pts]
-        
-        rates += [pop_dat['rate']]
-        mejs += [pop_dat['m_ej']]
-        
-        k += 1
-        
+        eu_pts = func(FeH_grid)
+        EuFe_pts += [eu_pts]
+
+EuFe_pts = np.array(EuFe_pts)
+
         
 ### MAKE ABUNDANCE PREDICTION PLOT
-        
-        
+
+
 # calculate abundance history confidence envelopes
 
-num_funcs = 10000
-eu_pts_disk_idxs = np.random.choice(range(len(eu_pts_list)),num_funcs,True,likes_disk/np.sum(likes_disk))
-eu_pts_disk_samps = np.array([eu_pts_list[idx] for idx in eu_pts_disk_idxs]).T
+CLS = [0.68,0.9]
+md, qs = [], []
 
-mds_disk = [np.nanmedian(eu_pts_disk_samps[i]) for i in range(len(fe_grid))]
-lbs_disk = [np.nanquantile(eu_pts_disk_samps[i],0.05) for i in range(len(fe_grid))]
-ubs_disk = [np.nanquantile(eu_pts_disk_samps[i],0.95) for i in range(len(fe_grid))]
-lbs_disk_std = [np.nanquantile(eu_pts_disk_samps[i],0.16) for i in range(len(fe_grid))]
-ubs_disk_std = [np.nanquantile(eu_pts_disk_samps[i],0.84) for i in range(len(fe_grid))]
-        
-        
-# plot inferred abundance history on top of observations
+def wtquantile(xs,qs,wts=[]):
+    
+    nan_idxs = np.isnan(xs)
+    xs = np.array(xs[~nan_idxs])
+    
+    num_xs = len(xs)
+    qs = np.array(qs, ndmin=1)
+    if len(xs) < 1: return np.full(2*len(qs),np.nan)
+    elif len(xs) == 1: return np.full(2*len(qs),xs[0])
+    if len(wts) < 1: wts = np.full(num_xs, 1.)
+    else: wts = np.array(wts[~nan_idxs])
+    
+    ps = wts/np.sum(wts)
+    xs_sorted,ps_sorted = zip(*sorted(list(zip(xs,ps)),reverse=False))
+
+    Ps = np.cumsum(ps_sorted)
+
+    idxs_lb = np.array([np.where(Ps >= (1.-q)/2.)[0][0] for q in qs])
+    idxs_ub = np.array([np.where(Ps >= 1.-(1.-q)/2.)[0][0] for q in qs])
+    xs_sorted = np.array(xs_sorted)
+
+    return list(xs_sorted[idxs_lb])+list(xs_sorted[idxs_ub])
+
+for i in range(NFEH):
+    
+    qs += [wtquantile(EuFe_pts[:,i],[0.68,0.9],np.exp(loglikes_disk))]
+    md += [wtquantile(EuFe_pts[:,i],0.,np.exp(loglikes_disk))]
+    
+qs = np.array(qs)
+
+
+# plot EuFe vs FeH tracks conditioned on stellar observations
 
 plt.figure(figsize=(6.4,4.8))
 
-plt.fill_between(fe_grid,lbs_disk,ubs_disk,facecolor=color,edgecolor=None,alpha=0.25, label='BNS',zorder=10) # 90% CI
-plt.fill_between(fe_grid,lbs_disk_std,ubs_disk_std,facecolor=color,edgecolor=None,alpha=0.5,zorder=10) # 68% CI
+plt.fill_between(FeH_grid,qs[:,1],qs[:,3],facecolor=color,edgecolor=None,alpha=0.25, label='BNS',zorder=10) # 90% CI
+plt.fill_between(FeH_grid,qs[:,0],qs[:,2],facecolor=color,edgecolor=None,alpha=0.5,zorder=10) # 68% CI
 
-plt.plot(fe_grid,mds_disk,c=color,zorder=10) # median
+plt.plot(FeH_grid,md,c=color,zorder=10) # median
 
 plt.errorbar(FeHs, EuFes, xerr=[FeH_errs,FeH_errs], yerr=[EuFe_errs,EuFe_errs], c='g', fmt=',', lw=1, label='SAGA')
 plt.scatter(FeHs_disk, EuFes_disk,marker='D',facecolor='dodgerblue',edgecolor='navy', s=16, lw=0.5, label='Battistini & Bensby (2016)')
 
-
 plt.xlim(-3.,0.5)
 plt.ylim(-1.,1.5)
-plt.xlabel('[Fe/H]')#,fontsize=16)
-plt.ylabel('[Eu/Fe]')#,fontsize=16)
+plt.xlabel('[Fe/H]')
+plt.ylabel('[Eu/Fe]')
 plt.legend(frameon=True,loc='upper right')
-plt.savefig('EuFe_'+tag+'.pdf')
+plt.savefig('plt/EuFe_'+tag+'.pdf')
 
 
 ### RECORD DTD PARAMETER CONSTRAINTS
@@ -164,31 +176,37 @@ print('maxL population realization')
 print('alpha: {0}\n'.format(alphas_disk[max_idx_disk]),'tmin: {0}\n'.format(tmins_disk[max_idx_disk]),'Xcoll: {0}\n'.format(xcolls_disk[max_idx_disk]),'Ybns: {0}\n'.format(ybnss_disk[max_idx_disk]),'log(maxL): {0}\n'.format(np.max(loglikes_disk)-np.mean(loglikes_disk)),'neff: {0}\n'.format(neff_disk))
 
 print('marginal alpha posterior')
-print('mean: {0}\n'.format(np.mean(alphas_disk[eu_pts_disk_idxs])),'median: {0}\n'.format(np.median(alphas_disk[eu_pts_disk_idxs])),'90lb: {0}\n'.format(np.quantile(alphas_disk[eu_pts_disk_idxs],0.05)),'90ub: {0}\n'.format(np.quantile(alphas_disk[eu_pts_disk_idxs],0.95)),'68lb: {0}\n'.format(np.quantile(alphas_disk[eu_pts_disk_idxs],0.16)),'68ub: {0}\n'.format(np.quantile(alphas_disk[eu_pts_disk_idxs],0.84)),'90os: {0}\n'.format(np.quantile(alphas_disk[eu_pts_disk_idxs],0.90)),'68os: {0}\n'.format(np.quantile(alphas_disk[eu_pts_disk_idxs],0.68)))
+print('mean: {0}\n'.format(np.average(alphas_disk,weights=np.exp(loglikes_disk))),'median: {0}\n'.format(wtquantile(alphas_disk,0.,np.exp(loglikes_disk))),'90: {0}\n'.format(wtquantile(alphas_disk,0.9,np.exp(loglikes_disk))),'68: {0}\n'.format(wtquantile(alphas_disk,0.68,np.exp(loglikes_disk))),'68lb: {0}\n'.format(wtquantile(alphas_disk,0.16,np.exp(loglikes_disk))),'90os: {0}\n'.format(wtquantile(alphas_disk,0.8,np.exp(loglikes_disk))[-1]),'68os: {0}\n'.format(wtquantile(alphas_disk,0.36,np.exp(loglikes_disk)))[-1])
 
 print('marginal tmin posterior')
-print('mean: {0}\n'.format(np.mean(tmins_disk[eu_pts_disk_idxs])),'median: {0}\n'.format(np.median(tmins_disk[eu_pts_disk_idxs])),'90lb: {0}\n'.format(np.quantile(tmins_disk[eu_pts_disk_idxs],0.05)),'90ub: {0}\n'.format(np.quantile(tmins_disk[eu_pts_disk_idxs],0.95)),'68lb: {0}\n'.format(np.quantile(tmins_disk[eu_pts_disk_idxs],0.16)),'68ub: {0}\n'.format(np.quantile(tmins_disk[eu_pts_disk_idxs],0.84)),'90os: {0}\n'.format(np.quantile(tmins_disk[eu_pts_disk_idxs],0.90)),'68os: {0}\n'.format(np.quantile(tmins_disk[eu_pts_disk_idxs],0.68)))
+print('mean: {0}\n'.format(np.average(tmins_disk,weights=np.exp(loglikes_disk))),'median: {0}\n'.format(wtquantile(tmins_disk,0.,np.exp(loglikes_disk))),'90: {0}\n'.format(wtquantile(tmins_disk,0.9,np.exp(loglikes_disk))),'68: {0}\n'.format(wtquantile(tmins_disk,0.68,np.exp(loglikes_disk))),'68lb: {0}\n'.format(wtquantile(tmins_disk,0.16,np.exp(loglikes_disk))),'90os: {0}\n'.format(wtquantile(tmins_disk,0.8,np.exp(loglikes_disk))[-1]),'68os: {0}\n'.format(wtquantile(tmins_disk,0.36,np.exp(loglikes_disk)))[-1])
 
-print('marginal xcoll posterior')
-print('mean: {0}\n'.format(np.mean(xcolls_disk[eu_pts_disk_idxs])),'median: {0}\n'.format(np.median(xcolls_disk[eu_pts_disk_idxs])),'90lb: {0}\n'.format(np.quantile(xcolls_disk[eu_pts_disk_idxs],0.05)),'90ub: {0}\n'.format(np.quantile(xcolls_disk[eu_pts_disk_idxs],0.95)),'68lb: {0}\n'.format(np.quantile(xcolls_disk[eu_pts_disk_idxs],0.16)),'68ub: {0}\n'.format(np.quantile(xcolls_disk[eu_pts_disk_idxs],0.84)),'90os: {0}\n'.format(np.quantile(xcolls_disk[eu_pts_disk_idxs],0.10)),'68os: {0}\n'.format(np.quantile(xcolls_disk[eu_pts_disk_idxs],0.32)),'10os: {0}\n'.format(np.quantile(xcolls_disk[eu_pts_disk_idxs],0.90)))
+print('marginal X0 posterior')
+print('mean: {0}\n'.format(np.average(xcolls_disk,weights=np.exp(loglikes_disk))),'median: {0}\n'.format(wtquantile(xcolls_disk,0.,np.exp(loglikes_disk))),'90: {0}\n'.format(wtquantile(xcolls_disk,0.9,np.exp(loglikes_disk))),'68: {0}\n'.format(wtquantile(xcolls_disk,0.68,np.exp(loglikes_disk))),'68lb: {0}\n'.format(wtquantile(xcolls_disk,0.16,np.exp(loglikes_disk))),'90os: {0}\n'.format(wtquantile(xcolls_disk,0.8,np.exp(loglikes_disk))[-1]),'68os: {0}\n'.format(wtquantile(xcolls_disk,0.36,np.exp(loglikes_disk)))[-1])
 
-print('marginal ybns posterior')
-print('mean: {0}\n'.format(np.mean(ybnss_disk[eu_pts_disk_idxs])),'median: {0}\n'.format(np.median(ybnss_disk[eu_pts_disk_idxs])),'90lb: {0}\n'.format(np.quantile(ybnss_disk[eu_pts_disk_idxs],0.05)),'90ub: {0}\n'.format(np.quantile(ybnss_disk[eu_pts_disk_idxs],0.95)),'68lb: {0}\n'.format(np.quantile(ybnss_disk[eu_pts_disk_idxs],0.16)),'68ub: {0}\n'.format(np.quantile(ybnss_disk[eu_pts_disk_idxs],0.84)),'90os: {0}\n'.format(np.quantile(ybnss_disk[eu_pts_disk_idxs],0.10)),'68os: {0}\n'.format(np.quantile(ybnss_disk[eu_pts_disk_idxs],0.32)),'10os: {0}\n'.format(np.quantile(ybnss_disk[eu_pts_disk_idxs],0.90)))
+print('marginal rate*mej posterior')
+print('mean: {0}\n'.format(np.average(ybnss_disk,weights=np.exp(loglikes_disk))),'median: {0}\n'.format(wtquantile(ybnss_disk,0.,np.exp(loglikes_disk))),'90: {0}\n'.format(wtquantile(ybnss_disk,0.9,np.exp(loglikes_disk))),'68: {0}\n'.format(wtquantile(ybnss_disk,0.68,np.exp(loglikes_disk))),'68lb: {0}\n'.format(wtquantile(ybnss_disk,0.16,np.exp(loglikes_disk))),'90os: {0}\n'.format(wtquantile(ybnss_disk,0.8,np.exp(loglikes_disk))[-1]),'68os: {0}\n'.format(wtquantile(ybnss_disk,0.36,np.exp(loglikes_disk)))[-1])
 
 
 ### MAKE INFERRED DTD PARAMETER PLOT
 
 
-# sample in BNS DTD parameter posteriors
+# downsample in BNS DTD parameter posteriors for plotting
+
+num_funcs = 10000
+
+prior_idxs = np.random.choice(range(len(alphas_disk)),num_funcs,True)
+alphas = alphas_disk
+tmins = np.array(tmins_disk)*1e3 # convert to Myr
+ybnss = ybnss_disk
 
 wts = likes_disk
+eu_pts_disk_idxs = np.random.choice(range(len(EuFe_pts)),num_funcs,True,wts/np.sum(wts))
 tmins_disk = np.array(tmins_disk)*1e3 # convert to Myr
 alphas_disk = alphas_disk[eu_pts_disk_idxs]
 tmins_disk = tmins_disk[eu_pts_disk_idxs]
 xcolls_disk = xcolls_disk[eu_pts_disk_idxs]
 ybnss_disk = ybnss_disk[eu_pts_disk_idxs]
-
-prior_idxs = np.random.choice(range(len(alphas_disk)),10000,True)
 
 
 # plot BNS DTD parameter posteriors
@@ -234,7 +252,7 @@ ax=plt.subplot(1, 3, 2)
 
 alphas_reflect, alphas_disk_reflect = [], []
 
-for alpha,alpha_disk in zip(alphas,alphas_disk):
+for alpha,alpha_disk in zip(alphas_compare,alphas_disk):
 
     if alpha < -2.9:
         alphas_reflect += [2*(-3.)-alpha]
@@ -267,7 +285,7 @@ ax=plt.subplot(1, 3, 3)
 
 tmins_reflect, tmins_disk_reflect = [], []
 
-for tmin, tmin_disk in zip(tmins,tmins_disk): # reflect across hard prior bounds
+for tmin, tmin_disk in zip(tmins_compare,tmins_disk): # reflect across hard prior bounds
     
     if tmin < 0.015*1e3:
         tmins_reflect += [2*(0.01*1e3)-tmin]
@@ -295,7 +313,7 @@ ax.set_yticklabels([])
 
 fig.subplots_adjust(wspace=0.5)
 plt.subplots_adjust(bottom=0.2)
-plt.savefig('dtd_'+tag+'.pdf')
+plt.savefig('plt/dtd_'+tag+'.pdf')
 
 
 ### MAKE INFERRED YBNS PLOT
@@ -303,13 +321,13 @@ plt.savefig('dtd_'+tag+'.pdf')
 
 # plot rate*mej parameter posteriors
 
-ybnss = np.array(rates)*np.array(mejs)
+ybnss = np.array(rates_disk)*np.array(mejs_disk)
 
 fig=plt.figure(figsize=(6.4,2.4))
 
 ax=plt.subplot(1, 3, 1)
 
-ybnss_disk_reflect, ybnss_reflect = [], [], []
+ybnss_disk_reflect, ybnss_reflect = [], []
 
 for ybns_disk,ybns in zip(ybnss_disk,ybnss): # reflect across hard prior bounds
  
@@ -348,9 +366,9 @@ axx=plt.subplot(1, 3, 2)
 
 alphas_disk_reflect, ybnss_disk_reflect = [], []
 
-for alpha,alpha_halo,ybns,ybns_halo in zip(alphas_disk,ybnss_disk): # reflect across hard prior bounds
+for alpha,ybns in zip(alphas_disk,ybnss_disk): # reflect across hard prior bounds
  
-    if ybns < 10.:
+    if ybns < 20.:
         alphas_disk_reflect += [alpha]
         ybnss_disk_reflect += [2.*(0.)-ybns]
     '''            
@@ -380,7 +398,7 @@ tmins_disk_reflect, ybnss_disk_reflect = [], []
 
 for tmin,ybns in zip(tmins_disk,ybnss_disk): # reflect across hard prior bounds
  
-    if ybns < 10.:
+    if ybns < 20.:
         tmins_disk_reflect += [tmin]
         ybnss_disk_reflect += [2.*(0.)-ybns]
     '''            
@@ -407,4 +425,4 @@ axx.set_yticklabels([])
 
 fig.subplots_adjust(wspace=0.5)
 plt.subplots_adjust(bottom=0.2)
-plt.savefig('ybns_'+tag+'.pdf')
+plt.savefig('plt/ybns_'+tag+'.pdf')

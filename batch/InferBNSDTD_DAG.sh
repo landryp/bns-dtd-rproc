@@ -27,7 +27,7 @@ subfile="$PWD/$batchdir/${binfile}.sub"
 args="arguments = \"\$(outdir) \$(obspath) \$(eufepath) \$(tag)\""
 
 echo "universe = vanilla" > $subfile
-echo "executable = $PWD/$binfile" >> $subfile
+echo "executable = $PWD/batch/$binfile" >> $subfile
 echo $args >> $subfile
 echo "output = $PWD/$batchdir/$binfile.out" >> $subfile
 echo "error = $PWD/$batchdir/$binfile.err" >> $subfile

@@ -48,9 +48,9 @@ PlotSecondChannelConstraints.py *# plot posterior samples in binary neutron star
 
 *the scripts in batch/ allow for the submission of batch analyses via condor*
 
-bash CalculateEnrichmentHistory_DAG.sh $(cat CalculateEnrichmentHistory_DAG.in) \
+bash batch/CalculateEnrichmentHistory_DAG.sh $(cat batch/CalculateEnrichmentHistory_DAG.in) \
 condor_submit_dag calculate_batch/CalculateEnrichmentHistory.dag
 
-bash InferBNSDTD_DAG.sh $(cat InferBNSDTD_DAG.in) \
+bash batch/InferBNSDTD_DAG.sh $(cat batch/InferBNSDTD_DAG.in) \
 condor_submit_dag infer_batch/InferBNSDTD.dag \
 bash InferBNSDTD_merge.sh
