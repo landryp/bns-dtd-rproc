@@ -53,4 +53,4 @@ condor_submit_dag calculate_batch/CalculateEnrichmentHistory.dag
 
 bash batch/InferBNSDTD_DAG.sh $(cat batch/InferBNSDTD_DAG.in) \
 condor_submit_dag infer_batch/InferBNSDTD.dag \
-bash InferBNSDTD_merge.sh
+bash batch/InferBNSDTD_merge.sh
