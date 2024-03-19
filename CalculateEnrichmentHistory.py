@@ -21,7 +21,7 @@ import h5py
 import numpy.lib.recfunctions as rfn
 from tqdm import tqdm
 
-from etc.rProcessChemicalEvolution import rproc_evolution, Xsun_Eu_r69
+from etc.rProcessChemicalEvolution import rproc_evolution
 from etc.rProcessUtils import * # import Daniel Siegel's one-zone r-process code
 
 
@@ -129,7 +129,7 @@ for i,(alpha,tdmin,Xcoll) in tqdm(enumerate(zip(alphas,tdmins,Eu_ratio_z0s))):
 		outdat['frac'][idx]['t'] = ts
 		
 		Rcoll0 = Rcoll[-1]
-		mcoll = mej*Xsun_Eu_r69*rate/((1./Xcoll - 1.)*Rcoll0)
+		mcoll = mej*rate/((1./Xcoll - 1.)*Rcoll0)
 		num = cumtrapz(mej*Rbns,ts)
 		denom = cumtrapz(mcoll*Rcoll,ts)
 		Xts = 1./(1.+num/denom)
