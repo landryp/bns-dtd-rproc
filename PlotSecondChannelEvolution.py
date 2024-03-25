@@ -23,6 +23,8 @@ import seaborn as sns
 import h5py
 from tqdm import tqdm
 
+from etc.rProcessChemicalEvolution import Xsun_Eu_r69 # bug fix!
+
 
 # user input
 
@@ -43,10 +45,6 @@ compare_color = 'k'
 
 tag = 'grbbnscls'
 
-FEH_MIN, FEH_MAX = (-3.,0.5)
-NFEH = int((FEH_MAX-FEH_MIN)/0.05) # Fe grid spacing for confidence intervals
-FeH_grid = np.linspace(FEH_MIN,FEH_MAX,NFEH)
-
 Z_MIN, Z_MAX = (0.,10.)
 NZ = int((Z_MAX-Z_MIN)/0.1) # z grid spacing for confidence intervals
 z_grid = np.linspace(Z_MIN,Z_MAX,NZ)
@@ -57,11 +55,13 @@ z_grid = np.linspace(Z_MIN,Z_MAX,NZ)
 # load population realizations and likelihoods
 
 alphas, tmins, X0s, mejs, rates, loglikes = np.loadtxt(LIKEDIR+LIKEPATH, unpack=True, delimiter=',', skiprows=1, max_rows=MAXNUM)
-Ys = np.array(rates)*np.array(mejs)
 
+Ys = np.array(rates)*np.array(mejs)
 loglikes = loglikes - np.max(loglikes)
 likes = np.exp(loglikes)
 max_idx = np.argmax(loglikes)
+
+marglikes = np.array([np.sum(likes[i*NMARG:(i+1)*NMARG]) for i in range(PARTS*NPOP)])
 
 npops = len(alphas)
 neff = np.sum(np.array(likes))**2/np.sum(np.array(likes)**2)
@@ -72,24 +72,19 @@ print('number of samples: {0}\n'.format(npops),'number of effective samples: {0}
 # load abundance predictions
 
 keys = [str(key) for key in range(PARTS)]
-EuFe_pts, Xs, zs = [], [], []
+Xs, zs = [], []
 
 for key in tqdm(keys):
     INPUTPATH = POPDIR+'.'.join(POPPATH.split('.')[:-1])+'.part{0}'.format(key)+'.'+POPPATH.split('.')[-1]
 
-    try: inputdat = h5py.File(INPUTPATH, 'r')
-    except: continue
+    inputdat = h5py.File(INPUTPATH, 'r')
     
     yield_dat_i = inputdat['yield']
     frac_dat_i = inputdat['frac']
     
-    for j in range(len(yield_dat_i)):
+    for j in range(int(len(yield_dat_i)/NMARG)):
     
-        yield_dat = yield_dat_i[str(j)]
-        frac_dat = frac_dat_i[str(j)]
-        func = interp1d(yield_dat['Fe_H'],yield_dat['Eu_Fe'],bounds_error=False)
-        eu_pts = func(FeH_grid)
-        EuFe_pts += [eu_pts]
+        frac_dat = frac_dat_i[str(j*NMARG)]
         
         Xts = frac_dat['X']
         zts = frac_dat['z']
@@ -97,9 +92,8 @@ for key in tqdm(keys):
         Xt_of_z = interp1d(zts,Xts,bounds_error=False)
         Xs += [Xt_of_z(z_grid)]
 
-EuFe_pts = np.array(EuFe_pts)
 Xs = np.array(Xs)
-
+prior_Xs = np.array([X[0] for X in Xs])
 
 ### MAKE ABUNDANCE PREDICTION PLOT
 
@@ -132,10 +126,14 @@ def wtquantile(xs,qs,wts=[]):
 
     return list(xs_sorted[idxs_lb])+list(xs_sorted[idxs_ub])
 
+prior_kde = gaussian_kde(list(prior_Xs)+list(-prior_Xs[prior_Xs < 0.1])+list(2.-prior_Xs[prior_Xs > 0.9]),bw_method='silverman')
+inv_wts = prior_kde(prior_Xs)
+wts = np.sum(inv_wts)/inv_wts
+
 for i in range(NZ):
     
-    Xqs += [wtquantile(Xs[:,i],[0.68,0.9],likes)]
-    Xmd += [wtquantile(Xs[:,i],0.,likes)]
+    Xqs += [wtquantile(Xs[:,i],[0.68,0.9],wts*marglikes)]
+    Xmd += [wtquantile(Xs[:,i],0.,wts*marglikes)]
     
 Xqs = np.array(Xqs)
 
