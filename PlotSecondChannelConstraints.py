@@ -23,6 +23,7 @@ import seaborn as sns
 import h5py
 from tqdm import tqdm
 
+from etc.rProcessChemicalEvolution import Xsun_Eu_r69 # bug fix!
 
 # user input
 
@@ -69,8 +70,8 @@ FeHs2, EuFes2, FeH_errs2, EuFe_errs2 = np.loadtxt(DATADIR2+OBSPATH2, unpack=True
 # load population realizations and likelihoods
 
 alphas, tmins, X0s, mejs, rates, loglikes = np.loadtxt(LIKEDIR+LIKEPATH, unpack=True, delimiter=',', skiprows=1, max_rows=MAXNUM)
-Ys = np.array(rates)*np.array(mejs)
 
+Ys = np.array(rates)*np.array(mejs)
 loglikes = loglikes - np.max(loglikes)
 likes = np.exp(loglikes)
 max_idx = np.argmax(loglikes)
@@ -89,8 +90,7 @@ EuFe_pts, Xs = [], []
 for key in tqdm(keys):
     INPUTPATH = POPDIR+'.'.join(POPPATH.split('.')[:-1])+'.part{0}'.format(key)+'.'+POPPATH.split('.')[-1]
 
-    try: inputdat = h5py.File(INPUTPATH, 'r')
-    except: continue
+    inputdat = h5py.File(INPUTPATH, 'r')
     
     yield_dat_i = inputdat['yield']
     frac_dat_i = inputdat['frac']
@@ -99,11 +99,17 @@ for key in tqdm(keys):
     
         yield_dat = yield_dat_i[str(j)]
         frac_dat = frac_dat_i[str(j)]
+        '''
         func = interp1d(yield_dat['Fe_H'],yield_dat['Eu_Fe'],bounds_error=False)
         eu_pts = func(FeH_grid)
         EuFe_pts += [eu_pts]
+        '''
         
-        Xs += [frac_dat['X'][-1]]
+        Xts = frac_dat['X']
+        zts = frac_dat['z']
+        
+        Xt_of_z = interp1d(zts,Xts,bounds_error=False)
+        Xs += [Xt_of_z(0.)]
 
 EuFe_pts = np.array(EuFe_pts)
 Xs = np.array(Xs)
@@ -142,8 +148,10 @@ def wtquantile(xs,qs,wts=[]):
 
 for i in range(NFEH):
     
-    qs += [wtquantile(EuFe_pts[:,i],[0.68,0.9],np.exp(loglikes))]
-    md += [wtquantile(EuFe_pts[:,i],0.,np.exp(loglikes))]
+    EuFe_pts_i = np.array([EuFe_pt[i] for EuFe_pt in EuFe_pts])
+    
+    qs += [wtquantile(EuFe_pts_i,[0.68,0.9],likes)]
+    md += [wtquantile(EuFe_pts_i,0.,likes)]
     
 qs = np.array(qs)
 
@@ -184,8 +192,12 @@ print('mean: {0}\n'.format(np.average(alphas,weights=np.exp(loglikes))),'median:
 print('marginal tmin posterior')
 print('mean: {0}\n'.format(np.average(tmins,weights=np.exp(loglikes))),'median: {0}\n'.format(wtquantile(tmins,0.,np.exp(loglikes))),'90: {0}\n'.format(wtquantile(tmins,0.9,np.exp(loglikes))),'68: {0}\n'.format(wtquantile(tmins,0.68,np.exp(loglikes))),'68lb: {0}\n'.format(wtquantile(tmins,0.16,np.exp(loglikes))),'90os: {0}\n'.format(wtquantile(tmins,0.8,np.exp(loglikes))[-1]),'68os: {0}\n'.format(wtquantile(tmins,0.36,np.exp(loglikes)))[-1])
 
-print('marginal X0 posterior')
-print('mean: {0}\n'.format(np.average(Xs,weights=np.exp(loglikes))),'median: {0}\n'.format(wtquantile(Xs,0.,np.exp(loglikes))),'90: {0}\n'.format(wtquantile(Xs,0.9,np.exp(loglikes))),'68: {0}\n'.format(wtquantile(Xs,0.68,np.exp(loglikes))),'68lb: {0}\n'.format(wtquantile(Xs,0.16,np.exp(loglikes))),'90os: {0}\n'.format(wtquantile(Xs,0.8,np.exp(loglikes))[-1]),'68os: {0}\n'.format(wtquantile(Xs,0.36,np.exp(loglikes)))[-1])
+prior_kde = gaussian_kde(list(Xs[::500])+list(-(Xs[::500])[Xs[::500] < 0.1])+list(2.-(Xs[::500])[Xs[::500] > 0.9]),bw_method='silverman')
+inv_wts = prior_kde(Xs)
+wts = np.sum(inv_wts)/inv_wts
+
+print('marginal X posterior')
+print('mean: {0}\n'.format(np.average(Xs,weights=wts*np.exp(loglikes))),'median: {0}\n'.format(wtquantile(Xs,0.,wts*np.exp(loglikes))),'90: {0}\n'.format(wtquantile(Xs,0.9,wts*np.exp(loglikes))),'68: {0}\n'.format(wtquantile(Xs,0.68,wts*np.exp(loglikes))),'68lb: {0}\n'.format(wtquantile(Xs,0.16,wts*np.exp(loglikes))),'90os: {0}\n'.format(wtquantile(Xs,0.8,wts*np.exp(loglikes))[-1]),'68os: {0}\n'.format(wtquantile(Xs,0.36,wts*np.exp(loglikes)))[-1])
 
 print('marginal rate*mej posterior')
 print('mean: {0}\n'.format(np.average(Ys,weights=np.exp(loglikes))),'median: {0}\n'.format(wtquantile(Ys,0.,np.exp(loglikes))),'90: {0}\n'.format(wtquantile(Ys,0.9,np.exp(loglikes))),'68: {0}\n'.format(wtquantile(Ys,0.68,np.exp(loglikes))),'68lb: {0}\n'.format(wtquantile(Ys,0.16,np.exp(loglikes))),'90os: {0}\n'.format(wtquantile(Ys,0.8,np.exp(loglikes))[-1]),'68os: {0}\n'.format(wtquantile(Ys,0.36,np.exp(loglikes)))[-1])
@@ -204,7 +216,7 @@ tmins_compare = np.array(tmins[prior_idxs])*1e3 # convert to Myr
 Xs_compare = Xs[prior_idxs]
 Ys_compare = Ys[prior_idxs]
 
-post_idxs = np.random.choice(range(len(EuFe_pts)),num_funcs,True,likes/np.sum(likes))
+post_idxs = np.random.choice(range(len(alphas)),num_funcs,True,likes/np.sum(likes))
 alphas_disk = alphas[post_idxs]
 tmins_disk = np.array(tmins[post_idxs])*1e3 # convert to Myr
 Xs_disk = Xs[post_idxs]
@@ -331,17 +343,17 @@ Ys_disk_reflect, Ys_reflect = [], []
 
 for Y_disk,Y in zip(Ys_disk,Ys_compare): # reflect across hard prior bounds
  
-    if Y_disk < 20.:
+    if Y_disk < 2.:
         Ys_disk_reflect += [2.*(0.)-Y_disk]
     '''            
-    elif Ys_disk > 180.:
+    elif Ys_disk > 18.:
         Ys_disk_reflect += [2.*(1.)-Y_disk]
     '''
     
-    if Y < 20.:
+    if Y < 2.:
         Ys_reflect += [2.*(0.)-Y]
     '''            
-    elif Y > 180.:
+    elif Y > 18.:
         Ys_reflect += [2.*(1.)-Y]
     '''
 
@@ -368,11 +380,11 @@ alphas_disk_reflect, Ys_disk_reflect = [], []
 
 for alpha,Ys in zip(alphas_disk,Ys_disk): # reflect across hard prior bounds
  
-    if Ys < 20.:
+    if Ys < 2.:
         alphas_disk_reflect += [alpha]
         Ys_disk_reflect += [2.*(0.)-Ys]
     '''            
-    elif Ys > 180.:
+    elif Ys > 18.:
         alphas_disk_reflect += [alpha]
         Ys_disk_reflect += [2.*(1.)-Ys]
 
@@ -398,11 +410,11 @@ tmins_disk_reflect, Ys_disk_reflect = [], []
 
 for tmin,Ys in zip(tmins_disk,Ys_disk): # reflect across hard prior bounds
  
-    if Ys < 20.:
+    if Ys < 2.:
         tmins_disk_reflect += [tmin]
         Ys_disk_reflect += [2.*(0.)-Ys]
     '''            
-    elif Ys > 180.:
+    elif Ys > 18.:
         tmins_disk_reflect += [tmin]
         Ys_disk_reflect += [2.*(1.)-Ys]
 
@@ -440,32 +452,32 @@ ax=plt.subplot(1, 3, 1)
 Xs_disk_reflect, Xs_compare_reflect = [], []
 
 for X,X_compare in zip(Xs_disk,Xs_compare): # reflect across hard prior bounds
- 
-    if X < 0.2:
+
+    if X < 0.1:
         Xs_disk_reflect += [2.*(0.)-X]
-            
-    elif X > 0.8:
+     
+    if X > 0.9:
         Xs_disk_reflect += [2.*(1.)-X]
         
-    if X_compare < 0.2:
+    if X_compare < 0.1:
         Xs_compare_reflect += [2.*(0.)-X_compare]
             
-    elif X_compare > 0.8:
+    elif X_compare > 0.9:
         Xs_compare_reflect += [2.*(1.)-X_compare]
 
-prior_kde = gaussian_kde(list(Xs_disk)+Xs_disk_reflect,bw_method='silverman')
+prior_kde = gaussian_kde(list(Xs_disk[::500])+list(-(Xs_disk[::500])[Xs_disk[::500] < 0.1])+list(2.-(Xs_disk[::500])[Xs_disk[::500] > 0.9]),bw_method='silverman')
 inv_wts = prior_kde(list(Xs_disk)+Xs_disk_reflect)
 wts = np.sum(inv_wts)/inv_wts
 
-prior_kde2 = gaussian_kde(list(Xs_compare)+Xs_compare_reflect,bw_method='silverman')
+prior_kde2 = gaussian_kde(list(Xs_compare[::500])+list(-(Xs_compare[::500])[Xs_compare[::500] < 0.1])+list(2.-(Xs_compare[::500])[Xs_compare[::500] > 0.9]),bw_method='silverman')
 inv_wts2 = prior_kde2(list(Xs_compare)+Xs_compare_reflect)
 wts2 = np.sum(inv_wts2)/inv_wts2
         
 ax.hist(list(Xs_compare)+Xs_compare_reflect,density=True,bins=np.arange(0.0,1.05,0.05),color=compare_color,alpha=0.1,weights=wts2)
 ax.hist(list(Xs_disk)+Xs_disk_reflect,density=True,bins=np.arange(0.0,1.05,0.05),color=color,alpha=0.25,weights=wts)
 
-sns.kdeplot(x=list(Xs_compare)+Xs_compare_reflect,color=compare_color,axes=ax,alpha=0.7,weights=wts2)
-sns.kdeplot(x=list(Xs_disk)+Xs_disk_reflect,c=color,axes=ax,weights=wts)
+sns.kdeplot(x=list(Xs_compare)+Xs_compare_reflect,color=compare_color,axes=ax,cut=20,alpha=0.7,weights=wts2)
+sns.kdeplot(x=list(Xs_disk)+Xs_disk_reflect,c=color,axes=ax,cut=20,weights=wts)
 
 plt.plot([-10.,-10.],[-10.,-5.],color='k',alpha=1,label='prior')
 plt.plot([-10.,-10.],[-10.,-5.],color=color,alpha=1,label='BNS+SFH')
@@ -483,14 +495,14 @@ axx=plt.subplot(1, 3, 2)
 alphas_disk_reflect, alphas_compare_reflect, Xs_disk_reflect, Xs_compare_reflect = [], [], [], []
 
 for alpha,alpha_compare,X,X_compare in zip(alphas_disk,alphas_compare,Xs_disk,Xs_compare):
- 
+
     if X < 0.1:
         alphas_disk_reflect += [alpha]
         Xs_disk_reflect += [2.*(0.)-X]
-            
-    elif X > 0.9:
+     
+    if X > 0.9:
         alphas_disk_reflect += [alpha]
-        xcolls_disk_reflect += [2.*(1.)-X]
+        Xs_disk_reflect += [2.*(1.)-X]
         
     if X_compare < 0.1:
         alphas_compare_reflect += [alpha_compare]
@@ -500,7 +512,7 @@ for alpha,alpha_compare,X,X_compare in zip(alphas_disk,alphas_compare,Xs_disk,Xs
         alphas_compare_reflect += [alpha_compare]
         Xs_compare_reflect += [2.*(1.)-X_compare]
 
-prior_kde = gaussian_kde(list(Xs_disk)+Xs_disk_reflect,bw_method='silverman')
+prior_kde = gaussian_kde(list(Xs_disk[::500])+list(-(Xs_disk[::500])[Xs_disk[::500] < 0.1])+list(2.-(Xs_disk[::500])[Xs_disk[::500] > 0.9]),bw_method='silverman')
 inv_wts = prior_kde(list(Xs_disk)+Xs_disk_reflect)
 wts = np.sum(inv_wts)/inv_wts
         
@@ -517,12 +529,12 @@ axx=plt.subplot(1, 3, 3)
 tmins_disk_reflect, tmins_compare_reflect, Xs_disk_reflect, Xs_compare_reflect = [], [], [], []
 
 for tmin,tmin_compare,X,X_compare in zip(tmins_disk,tmins_compare,Xs_disk,Xs_compare):
- 
+
     if X < 0.1:
         tmins_disk_reflect += [tmin]
         Xs_disk_reflect += [2.*(0.)-X]
-            
-    elif X > 0.9:
+     
+    if X > 0.9:
         tmins_disk_reflect += [tmin]
         Xs_disk_reflect += [2.*(1.)-X]
         
@@ -534,7 +546,7 @@ for tmin,tmin_compare,X,X_compare in zip(tmins_disk,tmins_compare,Xs_disk,Xs_com
         tmins_compare_reflect += [tmin_compare]
         Xs_compare_reflect += [2.*(1.)-X_compare]
 
-prior_kde = gaussian_kde(list(Xs_disk)+Xs_disk_reflect,bw_method='silverman')
+prior_kde = gaussian_kde(list(Xs_disk[::500])+list(-(Xs_disk[::500])[Xs_disk[::500] < 0.1])+list(2.-(Xs_disk[::500])[Xs_disk[::500] > 0.9]),bw_method='silverman')
 inv_wts = prior_kde(list(Xs_disk)+Xs_disk_reflect)
 wts = np.sum(inv_wts)/inv_wts
         
@@ -564,20 +576,20 @@ axx=plt.subplot(1, 3, 1)
 Ys_disk_reflect, Ys_compare_reflect, Xs_disk_reflect, Xs_compare_reflect, = [], [], [], []
 
 for Y,X,Y_compare,X_compare in zip(Ys_disk,Xs_disk,Ys_compare,Xs_compare):
- 
+
     if X < 0.1:
         Ys_disk_reflect += [Y]
         Xs_disk_reflect += [2.*(0.)-X]
-            
-    elif X > 0.9:
+     
+    if X > 0.9:
         Ys_disk_reflect += [Y]
         Xs_disk_reflect += [2.*(1.)-X]
         
-    if Y < 20.:
+    if Y < 2.:
         Xs_disk_reflect += [X]
         Ys_disk_reflect += [2.*(0.)-Y]
     '''            
-    elif Y > 190.:
+    elif Y > 18.:
         Xs_disk_reflect += [X]
         Ys_disk_reflect += [2.*(200.)-Ys]
     '''
@@ -589,20 +601,20 @@ for Y,X,Y_compare,X_compare in zip(Ys_disk,Xs_disk,Ys_compare,Xs_compare):
         Ys_compare_reflect += [Ys_compare]
         Xs_compare_reflect += [2.*(1.)-X_compare]
         
-    if Y_compare < 20.:
+    if Y_compare < 2.:
         Xs_compare_reflect += [X_compare]
         Ys_compare_reflect += [2.*(0.)-Y_compare]
     '''            
-    elif Y_compare > 190.:
+    elif Y_compare > 18.:
         Xs_compare_reflect += [X_compare]
         Ys_compare_reflect += [2.*(200.)-Y_compare]
     '''
 
-prior_kde = gaussian_kde(list(Xs_disk)+Xs_disk_reflect,bw_method='silverman')
+prior_kde = gaussian_kde(list(Xs_disk[::500])+list(-(Xs_disk[::500])[Xs_disk[::500] < 0.1])+list(2.-(Xs_disk[::500])[Xs_disk[::500] > 0.9]),bw_method='silverman')
 inv_wts = prior_kde(list(Xs_disk)+Xs_disk_reflect)
 wts = np.sum(inv_wts)/inv_wts
 
-prior_kde2 = gaussian_kde(list(Xs_compare)+Xs_compare_reflect,bw_method='silverman')
+prior_kde2 = gaussian_kde(list(Xs_compare[::500])+list(-(Xs_compare[::500])[Xs_compare[::500] < 0.1])+list(2.-(Xs_compare[::500])[Xs_compare[::500] > 0.9]),bw_method='silverman')
 inv_wts2 = prior_kde2(list(Xs_compare)+Xs_compare_reflect)
 wts2 = np.sum(inv_wts2)/inv_wts2
     
@@ -625,16 +637,16 @@ Ys_disk_reflect, Ys_compare_reflect = [], []
 
 for Y,Y_compare in zip(Ys_disk,Ys_compare):
         
-    if Y < 20.:
+    if Y < 2.:
         Ys_disk_reflect += [2.*(0.)-Y]
     '''            
-    elif Y > 180.:
+    elif Y > 18.:
         Ys_reflect += [2.*(200.)-Y]
     '''
-    if Y_compare < 20.:
+    if Y_compare < 2.:
         Ys_compare_reflect += [2.*(0.)-Y_compare]
     '''            
-    elif Y_compare > 180.:
+    elif Y_compare > 18.:
         Ys_compare_reflect += [2.*(200.)-Y_compare]
     '''
    
@@ -656,24 +668,24 @@ ax=plt.subplot(1, 3, 3)
 Xs_disk_reflect, Xs_compare_reflect = [], []
 
 for X,X_compare in zip(Xs_disk,Xs_compare):
- 
-    if X < 0.2:
+
+    if X < 0.1:
         Xs_disk_reflect += [2.*(0.)-X]
-            
-    elif X > 0.8:
+       
+    if X > 0.9:
         Xs_disk_reflect += [2.*(1.)-X]
         
-    if X_compare < 0.2:
+    if X_compare < 0.1:
         Xs_compare_reflect += [2.*(0.)-X_compare]
             
-    elif X_compare > 0.8:
+    elif X_compare > 0.9:
         Xs_compare_reflect += [2.*(1.)-X_compare]
 
-prior_kde = gaussian_kde(list(Xs_disk)+Xs_disk_reflect,bw_method='silverman')
+prior_kde = gaussian_kde(list(Xs_disk[::500])+list(-(Xs_disk[::500])[Xs_disk[::500] < 0.1])+list(2.-(Xs_disk[::500])[Xs_disk[::500] > 0.9]),bw_method='silverman')
 inv_wts = prior_kde(list(Xs_disk)+Xs_disk_reflect)
 wts = np.sum(inv_wts)/inv_wts
 
-prior_kde2 = gaussian_kde(list(Xs_compare)+Xs_compare_reflect,bw_method='silverman')
+prior_kde2 = gaussian_kde(list(Xs_compare[::500])+list(-(Xs_compare[::500])[Xs_compare[::500] < 0.1])+list(2.-(Xs_compare[::500])[Xs_compare[::500] > 0.9]),bw_method='silverman')
 inv_wts2 = prior_kde2(list(Xs_compare)+Xs_compare_reflect)
 wts2 = np.sum(inv_wts2)/inv_wts2
         
@@ -700,7 +712,7 @@ plt.savefig('plt/ratemej_'+tag+'.pdf')
 Xs_reflect, likes_reflect = [], []
 
 for X,like in zip(Xs,likes):
-    if X < 0.2: 
+    if X < 0.1: 
         Xs_reflect += [2.*(0.)-X]
         likes_reflect += [like]
 
