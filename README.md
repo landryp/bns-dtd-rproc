@@ -27,7 +27,7 @@ Battistini16_disk.csv *# r-process abundance measurements in galactic disk stars
 mej_rate_lcehl_psr+gw+nicer.dat *# binary neutron star merger rate and ejecta samples from Abbott+ PRX 2023, conditioned on neutron star equation of state information from Legred+ PRD 2021, courtesy of HY Chen* \
 mej_rate_lcehl_psr+gw.dat *# same as above, but conditioned on neutron star equation of state information from Legred+ PRD 2021, excluding x-ray pulse profile modeling by NICER, courtesy of HY Chen* \
 SAGA_MP.csv *# r-process abundance measurements in galactic disk and halo stars from the SAGA database* \
-Zevin22_sgrb_dtd.dat *# delay time distribution parameter samples inferred from short gamma-ray burst observations in Zevin+ ApJL 2022* \
+Zevin22_sgrb_dtd.dat *# delay time distribution parameter samples inferred from short gamma-ray burst observations in Zevin+ ApJL 2022*
 
 rProcessChemicalEvolution.py *# one-zone r-process chemical evolution code, adapted from D Siegel's*
 rProcessUtils.py *# utilities for one-zone r-process chemical evolution code, courtesy of D Siegel*
@@ -43,6 +43,8 @@ InferBNSDTD.py outdir obspath eufepath --maxnum maxnum --parts parts *# infer bi
 PlotDTDConstraints.py *# plot posterior samples in binary neutron star delay time distribution parameters*
 
 PlotSecondChannelConstraints.py *# plot posterior samples in binary neutron star rate-ejecta product and second-channel contribution fraction*
+
+PlotSecondChannelConstraints.py *# plot second-channel contribution fraction over Galactic history*
 
 ### Batch
 
