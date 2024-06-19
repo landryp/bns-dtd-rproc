@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from etc.rProcessUtils import *
 
-key_SFR='MF17' # star formation rate
+key_SFR='const' # star formation rate
 SOLARPATH = 'etc/Arnould07_solar_rprocess.dat'
 
 m_Mg = 0.12 # Mg yield per enrichment event in Msun
@@ -77,6 +77,7 @@ def rproc_evolution(R_NSNS_z0,m_r_NS,b_NS,tmin_NS,Xcoll=0.,f_NSgal=0.5,nppdt=20)
 
 	ts_tab = ts
 	psi_t_tab = psi_t(ts_tab, t_int_min,SFR = key_SFR) # SFR [Msun Mpc^-3 Gyr^-1]  
+	psi_t_tab = psi_t_tab * integrate(psi_t(ts_tab, t_int_min,SFR = 'MF17'), ts_tab, t_int_min, tmax)/integrate(psi_t(ts_tab, t_int_min,SFR = key_SFR), ts_tab, t_int_min, tmax)
 	psi_t_tab_MW = psi_t_tab / rho_MW # SFR per Milky Way equivalent galaxy [Msun/Gyr/MWEG]
 
 	R_coll_z0 = psi_t_tab[-1] # local volumetric collapsar rate, set to match SFR, infer this in combination with m_r_coll
@@ -122,6 +123,8 @@ def rproc_evolution(R_NSNS_z0,m_r_NS,b_NS,tmin_NS,Xcoll=0.,f_NSgal=0.5,nppdt=20)
 		Ns_NS.append(N_NS)
 
 	N_Ia = array([integrate(Rate_Ia, ts, tmin_intMW, t, method = 'auto') for t in ts])
+
+	print(N_Ia, N_CC)
 
 	Rate_CC_av = N_CC[-1]/(tmax-tmin_intMW)
 	Rate_MHDSN_av = N_MHDSN[-1]/(tmax-tmin_intMW)
