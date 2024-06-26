@@ -243,7 +243,7 @@ def psi_z(z, SFR = 'MF17'):
     psi = 1e9 * 0.01 * (1. + z)**2.6 / ( 1. + ((1.+z)/3.2)**6.2)
   elif (SFR == 'const'):
     #psi = 1e9 * 0.01 * ones_like(z) / ( 1. + (1./3.2)**6.2)
-    psi = 1e9 * 0.01 * ones_like(z)
+    psi = ones_like(z)
   else:
     exit('No valid SFR specified! Aborting.')
   #
