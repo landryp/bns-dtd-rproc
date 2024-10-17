@@ -2,7 +2,7 @@
 # coding: utf-8
 
 'INFERBNSDTD.IPYNB -- infer binary neutron star delay time distribution parameters and fractional second-channel contribution from galactic r-process abundance observations and Eu vs Fe abundance histories'
-__usage__ = 'InferDTD.py outdir obspath eufepath --maxnum maxnum --parts parts'
+__usage__ = 'InferBNSDTD.py outdir obspath dtdpath ejectapath -n npost -b nburn -w nwalk --alpha "-3.,-0.5" --tmin "1e-2,2.01" --ratemej "0.,15." --xsfh "1e-3,0.999" --multi True --verbose True'
 __author__ = 'Philippe Landry (pgjlandry@gmail.com)'
 __date__ = '09-2023'
 

@@ -36,23 +36,6 @@ rProcessUtils.py *# utilities for one-zone r-process chemical evolution code, co
 
 *these scripts are used for production analyses*
 
-CalculateEnrichmentHistory.py nsamp outpath dtdpath ejpath --alpha alpha_min,alpha_max --tmin tmin_min,tmin_max --xsfh xsfh_min,xsfh_max --nmarg nmarg *# calculate Eu vs Fe abundance history from binary neutron star merger rate, ejecta, delay time distribution and fractional contribution relative to a second channel, using Daniel Siegel's one-zone r-process nucleosynthesis code*
+InferBNSDTD.py outdir obspath dtdpath ejectapath -n npost -b nburn -w nwalk --alpha "-3.,-0.5" --tmin "1e-2,2.01" --ratemej "0.,15." --xsfh "1e-3,0.999" --multi True --verbose True *# infer binary neutron star delay time distribution parameters and fractional second-channel contribution from galactic r-process abundance observations and Eu vs Fe abundance histories*
 
-InferBNSDTD.py outdir obspath eufepath --maxnum maxnum --parts parts *# infer binary neutron star delay time distribution parameters and fractional second-channel contribution from galactic r-process abundance observations and Eu vs Fe abundance histories*
 
-PlotDTDConstraints.py *# plot posterior samples in binary neutron star delay time distribution parameters*
-
-PlotSecondChannelConstraints.py *# plot posterior samples in binary neutron star rate-ejecta product and second-channel contribution fraction*
-
-PlotSecondChannelConstraints.py *# plot second-channel contribution fraction over Galactic history*
-
-### Batch
-
-*the scripts in batch/ allow for the submission of batch analyses via condor*
-
-bash batch/CalculateEnrichmentHistory_DAG.sh $(cat batch/CalculateEnrichmentHistory_DAG.in) \
-condor_submit_dag calculate_batch/CalculateEnrichmentHistory.dag
-
-bash batch/InferBNSDTD_DAG.sh $(cat batch/InferBNSDTD_DAG.in) \
-condor_submit_dag infer_batch/InferBNSDTD.dag \
-bash batch/InferBNSDTD_merge.sh
