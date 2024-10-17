@@ -15,7 +15,7 @@ __date__ = '09-2023'
 from argparse import ArgumentParser
 import numpy as np
 from scipy.interpolate import interp1d
-from scipy.stats import multivariate_normal, gaussian_kde
+from scipy.stats import multivariate_normal, gaussian_kde, loguniform
 from scipy.integrate import cumtrapz
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -27,8 +27,8 @@ import os
 import h5py
 from tqdm import tqdm
 
-from multiprocessing import Pool
-import multiprocessing
+#from multiprocessing import Pool
+#import multiprocessing
 
 from etc.rProcessUtils import rho_MW
 from etc.rProcessChemicalEvolution import rproc_evolution
@@ -47,15 +47,14 @@ parser.add_argument('-r','--ratemej',default="0.,15.")
 parser.add_argument('--tag',default=None)
 parser.add_argument('-n','--npost',default=10000)
 parser.add_argument('-w','--nwalk',default=21)
+parser.add_argument('-b','--nburn',default=100)
 parser.add_argument('-k','--nkde',default=None)
-parser.add_argument('-b','--burn',default=100)
 
 
 args = parser.parse_args()
 
 OUTDIR = str(args.outdir) # 'dat/' # output directory for plots, likelihood-weighted population samples
 OBSPATH = str(args.obspath) # 'data/SAGA_MP.csv' # observations of stellar Eu vs Fe abundances
-EUFEPATH = str(args.eufepath) # 'dat/EuFe_bnscls-10000.part.h5' # path to population samples
 DTDPATH = str(args.dtdpath) # 'etc/label_samples.dat' # GRB-informed DTD parameter distributions # '' # uniform DTD parameter distribution
 EJECTAPATH = str(args.ejpath) # 'etc/mej_gal_lcehl_nicer_numuncertainty.txt' # input samples in ejecta mass and rate
 SOLARPATH = str(args.solpath) # 'etc/arnould_07_solar_r-process.txt' # solar abundances
@@ -66,7 +65,7 @@ RATEMEJ_BOUNDS = [float(bnd) for bnd in str(args.ratemej).split(',')] # (0.,15.)
 if args.tag is not None:
 	TAG = str(args.tag) # optional tag for output file
 else: TAG = None
-NPOST = int(args.nsamp) # number of abundance predictions to calculate -- equals number of BNS DTD posterior samples to target with mcmc
+NPOST = int(args.npost) # number of abundance predictions to calculate -- equals number of BNS DTD posterior samples to target with mcmc
 if args.nkde is not None: NUM = int(args.nkde) # number of prior samples to draw for building kdes
 else: NUM = None
 NWALK = int(args.nwalk) # number of mcmc walkers to evolve
@@ -81,6 +80,8 @@ Z_MIN, Z_MAX = (0.,10.)
 NZ = int((Z_MAX-Z_MIN)/0.1) # z grid spacing for abundance ratio evolution
 
 KDENORMPTS = 100 # resolution to use when computing kde norms
+
+PARAMS = ['alpha','log10tmin','ratemej','X0']
 
 if not os.path.exists(OUTDIR):
 	os.makedirs(OUTDIR)
@@ -99,7 +100,7 @@ ratemej = rate*mej
 if NUM is None: NUM = len(ratemej)
 
 idxs = np.random.choice(range(len(ratemej)),NUM,False)
-ratemej = alpha[idxs]
+ratemej = ratemej[idxs]
 
 prior_ratemej_nonorm = gaussian_kde(ratemej)
 ratemej_grid = np.linspace(*RATEMEJ_BOUNDS,KDENORMPTS)
@@ -114,25 +115,26 @@ if DTDPATH != '':
 	alpha, tdmin, tdmax = np.loadtxt(DTDPATH, unpack=True, skiprows=1)
 	tdmin = tdmin/1e9 # convert to Gyr
     
-    if args.nkde is None: NUM = len(alpha)
+	if args.nkde is None: NUM = len(alpha)
     
 	idxs = np.random.choice(range(len(alpha)),NUM,False)
 	alphas = alpha[idxs]
 	tdmins = tdmin[idxs]
     
-    prior_alphalog10tmin_nonorm = gaussian_kde(np.row_stack((alpha,np.log10(tdmins))))
-    alpha_grid = np.linspace(*ALPHA_BOUNDS,KDENORMPTS)
-    log10tmin_grid = np.linspace(np.log10(TDMIN_BOUNDS[0]),np.log10(TDMIN_BOUNDS[1]),KDENORMPTS)
-    x,y = np.meshgrid(alpha_grid,log10tmin_grid)
-    alphalog10tmin_kde_norm = np.trapz(np.trapz(prior_alphalog10tmin_nonorm(np.vstack([x.ravel(),y.ravel()])).reshape(len(x),len(y)), alpha_grid, axis=0),log10tmin_grid, axis=0)
-    prior_alphalog10tmin = lambda xy: prior_alphalog10tmin_nonorm(xy)/alphalog10tmin_kde_norm
+	prior_alphalog10tmin_nonorm = gaussian_kde(np.row_stack((alpha,np.log10(tdmins))))
+	alpha_grid = np.linspace(*ALPHA_BOUNDS,KDENORMPTS)
+	log10tmin_grid = np.linspace(np.log10(TDMIN_BOUNDS[0]),np.log10(TDMIN_BOUNDS[1]),KDENORMPTS)
+	x,y = np.meshgrid(alpha_grid,log10tmin_grid)
+	alphalog10tmin_kde_norm = np.trapz(np.trapz(prior_alphalog10tmin_nonorm(np.vstack([x.ravel(),y.ravel()])).reshape(len(x),len(y)), alpha_grid, axis=0),log10tmin_grid, axis=0)
+	def prior_alphalog10tmin(alpha,log10tmin):
+        return prior_alphalog10tmin_nonorm((alpha,log10tmin))/alphalog10tmin_kde_norm
 
 else:
     
-    alphas = np.random.uniform(*ALPHA_BOUNDS,NUM) # uniform prior on DTD power law index
-    tdmins = loguniform.rvs(*TDMIN_BOUNDS,size=NUM) # log-uniform prior on minimum delay time in Gyr
+	alphas = np.random.uniform(*ALPHA_BOUNDS,NUM) # uniform prior on DTD power law index
+	tdmins = loguniform.rvs(*TDMIN_BOUNDS,size=NUM) # log-uniform prior on minimum delay time in Gyr
     
-    prior_alphalog10tmin = lambda xy: 1./((ALPHA_BOUNDS[1]-ALPHA_BOUNDS[0])*(np.log10(TDMIN_BOUNDS[1])-np.log10(TDMIN_BOUNDS[0])))
+	prior_alphalog10tmin = lambda xy: 1./((ALPHA_BOUNDS[1]-ALPHA_BOUNDS[0])*(np.log10(TDMIN_BOUNDS[1])-np.log10(TDMIN_BOUNDS[0])))
 
 
 # sample in collapsar yield
@@ -144,26 +146,52 @@ Eu_ratio_z0s = np.random.uniform(*EU_RATIO_Z0_BOUNDS,NUM) # uniform prior on rat
 prior_X0 = lambda X0: 1./(EU_RATIO_Z0_BOUNDS[1]-EU_RATIO_Z0_BOUNDS[0])
 
 
+# save prior bounds to dict and determine which mcmc parameters to sample
+
+params_dict = {}
+params_dict['samples'] = {}
+params_dict['bounds'] = {}
+params_dict['infer'] = {}
+
+params_dict['samples']['alpha'] = alphas[(alphas >= ALPHA_BOUNDS[0]) & (alphas <= ALPHA_BOUNDS[1])]
+params_dict['samples']['log10tmin'] = np.log10(tdmins[(tdmins >= TDMIN_BOUNDS[0]) & (tdmins <= TDMIN_BOUNDS[1])])
+params_dict['samples']['ratemej'] = ratemej[(ratemej >= RATEMEJ_BOUNDS[0]) & (ratemej <= RATEMEJ_BOUNDS[1])]
+params_dict['samples']['X0'] = Eu_ratio_z0s[(Eu_ratio_z0s >= EU_RATIO_Z0_BOUNDS[0]) & (Eu_ratio_z0s <= EU_RATIO_Z0_BOUNDS[1])]
+
+params_dict['bounds']['alpha'] = ALPHA_BOUNDS
+params_dict['bounds']['log10tmin'] = np.log10(TDMIN_BOUNDS)
+params_dict['bounds']['ratemej'] = RATEMEJ_BOUNDS
+params_dict['bounds']['X0'] = EU_RATIO_Z0_BOUNDS
+
+NDIM = 0
+
+for i,param in enumerate(alpha,np.log10(tdmin),ratemej,Eu_ratio_z0s):
+    if len(list(set(var))) > 1:
+        NDIM += 1
+        params_dict['infer'][PARAMS[i]] = True
+    else: params_dict['infer'][PARAMS[i]] = False
+
+
 ### BUILD LIKELIHOOD FUNCTIONS FOR OBSERVATIONS
 
 
-# load SAGA data
+# load stellar spectrum data
 
 FeHs, EuFes, FeH_errs, EuFe_errs = np.loadtxt(OBSPATH, unpack=True, delimiter=',', skiprows=1)
 
 
-# make gaussian likelihood model for each SAGA datapoint
+# make gaussian likelihood model for each spectrum datapoint
 
-saga_like_means = []
-saga_like_stds = []
+like_means = []
+like_stds = []
 
 for fe,eu,fe_err,eu_err in zip(FeHs, EuFes, FeH_errs, EuFe_errs):
 
     mean = np.array([fe,eu])
     std = np.array([[fe_err,0.],[0.,eu_err]])
     
-    saga_like_means += [mean]
-    saga_like_stds += [std]   
+    like_means += [mean]
+    like_stds += [std]   
 
 
 ### DO INFERENCE OF BNS DTD AND COLLAPSAR CONTRIBUTION
@@ -200,7 +228,11 @@ def log_likelihood(theta, like_means, like_stds):
     
     return np.sum(loglikes)
 
-def log_posterior(theta, like_means, like_stds):
+def log_posterior(theta, like_means, like_stds, param_dict):
+    
+    pop_params_sample_dict = {}
+    for i,param in enumerate(param_dict['infer']):
+        pop_params_sample_dict[param] = theta[i]
     
     logprior = log_prior(theta)
     
@@ -211,20 +243,21 @@ def log_posterior(theta, like_means, like_stds):
 
 # do mcmc sampling with emcee
 
+i = 0
 init = np.empty((NWALK, NDIM))
-init[:, 0] = np.random.uniform(*ALPHA_BOUNDS, NWALK)
-init[:, 1] = loguniform.rvs(*TDMIN_BOUNDS,size=NWALK)
-init[:, 2] = np.random.uniform(*RATEMEJ_BOUNDS, NWALK)
-init[:, 3] = np.random.uniform(*EU_RATIO_Z0_BOUNDS, NWALK)
+for param in PARAMS:
+    if param_dict['infer'][param]:
+        init[:,i] = np.random.choice(param_dict['samples'][param],NWALK,False)
+        i += 1
 
-with multiprocessing.Pool(NWALK) as pool:
-    print('running')
-    sampler = emcee.EnsembleSampler(NWALK, NDIM, log_posterior, args=(like_means, like_stds), pool=pool)
-    start = time.time()
-    sampler.run_mcmc(init, NPOST, progress=True)
-    end = time.time()
-    elapsed = end - start
-    print("Multiprocessing took {0:.1f} min".format(elapsed/60.))
+#with multiprocessing.Pool(NWALK) as pool:
+    #print('running')
+sampler = emcee.EnsembleSampler(NWALK, NDIM, log_posterior, args=(like_means, like_stds, param_dict))#, pool=pool)
+start = time.time()
+sampler.run_mcmc(init, NPOST, progress=True)
+end = time.time()
+elapsed = end - start
+    #print("Multiprocessing took {0:.1f} min".format(elapsed/60.))
 
 chains = sampler.get_chain().reshape(NWALK,NPOST,NDIM)
 acls = sampler.get_autocorr_time(quiet=True)
