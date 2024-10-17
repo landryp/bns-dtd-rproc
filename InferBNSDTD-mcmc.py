@@ -27,9 +27,6 @@ import os
 import h5py
 from tqdm import tqdm
 
-#from multiprocessing import Pool
-#import multiprocessing
-
 from etc.rProcessUtils import rho_MW
 from etc.rProcessChemicalEvolution import rproc_evolution
 
@@ -45,6 +42,7 @@ parser.add_argument('-t','--tmin',default="1e-2,2.01")
 parser.add_argument('-x','--xsfh',default="1e-3,0.999")
 parser.add_argument('-r','--ratemej',default="0.,15.")
 parser.add_argument('--tag',default=None)
+parser.add_argument('--multi',default=False)
 parser.add_argument('-n','--npost',default=10000)
 parser.add_argument('-w','--nwalk',default=21)
 parser.add_argument('-b','--nburn',default=100)
@@ -73,6 +71,9 @@ if args.maxobs is not None: MAXOBS = int(args.maxobs) # number of observations t
 else: MAXOBS = None
 if args.nkde is not None: NUM = int(args.nkde) # number of prior samples to draw for building kdes
 else: NUM = None
+if args.multi: 
+    from multiprocessing import Pool
+    import multiprocessing
 
 FEH_MIN, FEH_MAX = (-3.,0.5)
 NFEH = int((FEH_MAX-FEH_MIN)/0.05) # Fe grid spacing for chemical evolution tracks
@@ -258,14 +259,23 @@ for param in PARAMS:
         init[:,i] = np.random.choice(params_dict['samples'][param],NWALK,False)
         i += 1
 
-#with multiprocessing.Pool(NWALK) as pool:
-    #print('running')
-sampler = emcee.EnsembleSampler(NWALK, NDIM, log_posterior, args=(like_means, like_stds, PARAMS, params_dict))#, pool=pool)
-start = time.time()
-sampler.run_mcmc(init, NPOST, progress=True)
-end = time.time()
-elapsed = end - start
-    #print("Multiprocessing took {0:.1f} min".format(elapsed/60.))
+if args.multi:        
+    with multiprocessing.Pool(NWALK) as pool:
+        print('running')
+        sampler = emcee.EnsembleSampler(NWALK, NDIM, log_posterior, args=(like_means, like_stds, PARAMS, params_dict), pool=pool)
+        start = time.time()
+        sampler.run_mcmc(init, NPOST, progress=True)
+        end = time.time()
+        elapsed = end - start
+        print("multiprocessing took {0:.1f} min".format(elapsed/60.))
+else:
+    print('running')
+    sampler = emcee.EnsembleSampler(NWALK, NDIM, log_posterior, args=(like_means, like_stds, PARAMS, params_dict))
+    start = time.time()
+    sampler.run_mcmc(init, NPOST, progress=True)
+    end = time.time()
+    elapsed = end - start
+    print("emcee took {0:.1f} min".format(elapsed/60.))
 
 chains = sampler.get_chain().reshape(NWALK,NPOST,NDIM)
 acls = sampler.get_autocorr_time(quiet=True)
