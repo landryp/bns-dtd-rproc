@@ -48,6 +48,7 @@ parser.add_argument('--tag',default=None)
 parser.add_argument('-n','--npost',default=10000)
 parser.add_argument('-w','--nwalk',default=21)
 parser.add_argument('-b','--nburn',default=100)
+parser.add_argument('-m','--maxobs',default=None)
 parser.add_argument('-k','--nkde',default=None)
 
 
@@ -66,10 +67,12 @@ if args.tag is not None:
 	TAG = str(args.tag) # optional tag for output file
 else: TAG = None
 NPOST = int(args.npost) # number of abundance predictions to calculate -- equals number of BNS DTD posterior samples to target with mcmc
-if args.nkde is not None: NUM = int(args.nkde) # number of prior samples to draw for building kdes
-else: NUM = None
 NWALK = int(args.nwalk) # number of mcmc walkers to evolve
 NBURN = int(args.nburn) # number of mcmc burn-in samples to discard
+if args.maxobs is not None: MAXOBS = int(args.maxobs) # number of observations to consider
+else: MAXOBS = None
+if args.nkde is not None: NUM = int(args.nkde) # number of prior samples to draw for building kdes
+else: NUM = None
 
 FEH_MIN, FEH_MAX = (-3.,0.5)
 NFEH = int((FEH_MAX-FEH_MIN)/0.05) # Fe grid spacing for chemical evolution tracks
@@ -121,13 +124,13 @@ if DTDPATH != '':
 	alphas = alpha[idxs]
 	tdmins = tdmin[idxs]
     
-	prior_alphalog10tmin_nonorm = gaussian_kde(np.row_stack((alpha,np.log10(tdmins))))
+	prior_alphalog10tmin_nonorm = gaussian_kde(np.row_stack((alphas,np.log10(tdmins))))
 	alpha_grid = np.linspace(*ALPHA_BOUNDS,KDENORMPTS)
 	log10tmin_grid = np.linspace(np.log10(TDMIN_BOUNDS[0]),np.log10(TDMIN_BOUNDS[1]),KDENORMPTS)
 	x,y = np.meshgrid(alpha_grid,log10tmin_grid)
 	alphalog10tmin_kde_norm = np.trapz(np.trapz(prior_alphalog10tmin_nonorm(np.vstack([x.ravel(),y.ravel()])).reshape(len(x),len(y)), alpha_grid, axis=0),log10tmin_grid, axis=0)
 	def prior_alphalog10tmin(alpha,log10tmin):
-        return prior_alphalog10tmin_nonorm((alpha,log10tmin))/alphalog10tmin_kde_norm
+		return prior_alphalog10tmin_nonorm((alpha,log10tmin))/alphalog10tmin_kde_norm
 
 else:
     
@@ -165,8 +168,8 @@ params_dict['bounds']['X0'] = EU_RATIO_Z0_BOUNDS
 
 NDIM = 0
 
-for i,param in enumerate(alpha,np.log10(tdmin),ratemej,Eu_ratio_z0s):
-    if len(list(set(var))) > 1:
+for i,param in enumerate([alpha,np.log10(tdmin),ratemej,Eu_ratio_z0s]):
+    if len(list(set(param))) > 1:
         NDIM += 1
         params_dict['infer'][PARAMS[i]] = True
     else: params_dict['infer'][PARAMS[i]] = False
@@ -177,7 +180,7 @@ for i,param in enumerate(alpha,np.log10(tdmin),ratemej,Eu_ratio_z0s):
 
 # load stellar spectrum data
 
-FeHs, EuFes, FeH_errs, EuFe_errs = np.loadtxt(OBSPATH, unpack=True, delimiter=',', skiprows=1)
+FeHs, EuFes, FeH_errs, EuFe_errs = np.loadtxt(OBSPATH, unpack=True, delimiter=',', skiprows=1, max_rows=MAXOBS)
 
 
 # make gaussian likelihood model for each spectrum datapoint
@@ -199,20 +202,20 @@ for fe,eu,fe_err,eu_err in zip(FeHs, EuFes, FeH_errs, EuFe_errs):
 
 # define prior, likelihood and posterior for mcmc
 
-def log_prior(theta):
+def log_prior(params_array):
     
-    alpha,log10tmin,ratemej,X0 = theta
+    alpha,log10tmin,ratemej,X0 = params_array
     
     if alpha > ALPHA_BOUNDS[1] or alpha < ALPHA_BOUNDS[0]: return -np.inf
     if log10tmin > np.log10(TDMIN_BOUNDS[1]) or log10tmin < np.log10(TDMIN_BOUNDS[0]): return -np.inf
     if ratemej > RATEMEJ_BOUNDS[1] or ratemej < RATEMEJ_BOUNDS[0]: return -np.inf
     if X0 > EU_RATIO_Z0_BOUNDS[1] or X0 < EU_RATIO_Z0_BOUNDS[0]: return -np.inf
     
-    return np.log(prior_ratemej(ratemej)*prior_alphalog10tmin((alpha,log10tmin))*prior_X0(X0))
+    return np.log(prior_ratemej(ratemej)*prior_alphalog10tmin(alpha,log10tmin)*prior_X0(X0))
 
-def log_likelihood(theta, like_means, like_stds):
+def log_likelihood(params_array, like_means, like_stds):
     
-    alpha,log10tmin,ratemej,X0 = theta
+    alpha,log10tmin,ratemej,X0 = params_array
     
     b_NS = -alpha
     tmin_NS = 1e-3*10.**log10tmin
@@ -228,17 +231,22 @@ def log_likelihood(theta, like_means, like_stds):
     
     return np.sum(loglikes)
 
-def log_posterior(theta, like_means, like_stds, param_dict):
+def log_posterior(theta, like_means, like_stds, PARAMS, params_dict):
     
-    pop_params_sample_dict = {}
-    for i,param in enumerate(param_dict['infer']):
-        pop_params_sample_dict[param] = theta[i]
+    i = 0
+    params_array = []
+    for param in PARAMS:
+        if params_dict['infer'][param]:
+            params_array += [theta[i]]
+            i += 1
+        else: params_array += [params_dict['samples'][param][0]]
+    params_array = np.array(params_array)
     
-    logprior = log_prior(theta)
+    logprior = log_prior(params_array)
     
     if not np.isfinite(logprior): return -np.inf
     
-    return logprior + log_likelihood(theta, like_means, like_stds)
+    return logprior + log_likelihood(params_array, like_means, like_stds)
 
 
 # do mcmc sampling with emcee
@@ -246,13 +254,13 @@ def log_posterior(theta, like_means, like_stds, param_dict):
 i = 0
 init = np.empty((NWALK, NDIM))
 for param in PARAMS:
-    if param_dict['infer'][param]:
-        init[:,i] = np.random.choice(param_dict['samples'][param],NWALK,False)
+    if params_dict['infer'][param]:
+        init[:,i] = np.random.choice(params_dict['samples'][param],NWALK,False)
         i += 1
 
 #with multiprocessing.Pool(NWALK) as pool:
     #print('running')
-sampler = emcee.EnsembleSampler(NWALK, NDIM, log_posterior, args=(like_means, like_stds, param_dict))#, pool=pool)
+sampler = emcee.EnsembleSampler(NWALK, NDIM, log_posterior, args=(like_means, like_stds, PARAMS, params_dict))#, pool=pool)
 start = time.time()
 sampler.run_mcmc(init, NPOST, progress=True)
 end = time.time()
@@ -322,6 +330,9 @@ Xts = np.array(Xts)
 
 # save r-process abundance data and popoulation parameters
 
+if TAG is None: OUTPATH = OUTDIR+'/'+(OBSPATH.split('/')[-1]).split('.')[0]+'_{0}.h5'.format(NUM)
+else: OUTPATH = OUTDIR+'/'+(OBSPATH.split('/')[-1]).split('.')[0]+'_{0}.{1}.h5'.format(NUM,TAG)
+
 outfile = h5py.File(OUTPATH, 'w')
 
 pop_set = outfile.create_group('pop')
@@ -344,3 +355,24 @@ for key, value in outdat['frac'].items():
 
 outfile.close()
 
+
+# plot mcmc samples and traces
+
+df = pd.DataFrame(flat_samples,columns=PARAMS)
+g = sns.pairplot(df,corner=True,diag_kind='kde',plot_kws={'size': 2, 'alpha': 0.1})
+g.map_offdiag(sns.kdeplot,levels=[0.1,0.5])
+plt.savefig('.'.join(OUTPATH.split('.')[:-1])+'_corner.png')
+
+fig = plt.figure()
+gs = gridspec.GridSpec(NDIM, 1)
+axs = [plt.subplot(gs[i]) for i in range(NDIM)]
+plt.subplots_adjust(hspace=0.05)
+
+for i,ax in enumerate(axs):
+    for chain in chains: ax.plot(chain[:,i], c=sns.color_palette()[0], alpha=0.2)
+    ax.set_ylabel(samples.columns[i])
+    ax.axvline(NBURN,lw=1,ls='--',c='k')
+    if i < len(axs)-1: ax.tick_params(labelbottom=False)
+
+axs[-1].set_xlabel('steps')
+plt.savefig('.'.join(OUTPATH.split('.')[:-1])+'_traces.png')
